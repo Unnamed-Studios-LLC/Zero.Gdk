@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PackageId>ZeroServices.Game.Shared</PackageId>
+    <Authors>Tucker Ulrich</Authors>
+    <Company>Unnamed Studios, LLC</Company>
+    <Product>Zero Game Services</Product>
+    <Copyright>2022 Unnamed Studios, LLc</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+</Project>

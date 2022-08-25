@@ -1,0 +1,189 @@
+# ASP.NET Core
+# Build and test ASP.NET Core projects targeting .NET Core.
+# Add steps that run tests, create a NuGet package, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  buildConfiguration: 'Release'
+  major: 0
+  minor: 0
+  patch: $[counter(variables['minor'], 0)] #this will reset when we bump minor
+  NugetVersionBeta: $(major).$(minor).$(patch)
+  NugetVersion: $(major).$(minor).$(patch)-beta
+
+steps:
+
+- task: DotNetCoreCLI@2
+  displayName: Restore
+  inputs:
+    command: restore
+    projects: '**/*.csproj'
+    feedsToUse: 'config'
+    nugetConfigPath: 'NuGet.config'
+    arguments: '--configuration $(buildConfiguration)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build Shared'
+  inputs:
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
+    projects: 'Zero.Game.Shared/Zero.Game.Shared.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build Common'
+  inputs:
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
+    projects: 'Zero.Game.Common/Zero.Game.Common.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build Client'
+  inputs:
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
+    projects: 'Zero.Game.Client/Zero.Game.Client.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build Server'
+  inputs:
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
+    projects: 'Zero.Game.Server/Zero.Game.Server.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build Local'
+  inputs:
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
+    projects: 'Zero.Game.Local/Zero.Game.Local.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Shared"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Shared/Zero.Game.Shared.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersion'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Shared Beta"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Shared/Zero.Game.Shared.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersionBeta'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Common"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Common/Zero.Game.Common.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersion'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Common Beta"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Common/Zero.Game.Common.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersionBeta'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Client"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Client/Zero.Game.Client.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersion'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Client Beta"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Client/Zero.Game.Client.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersionBeta'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Server"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Server/Zero.Game.Server.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersion'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Server Beta"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Server/Zero.Game.Server.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersionBeta'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Local"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Local/Zero.Game.Local.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersion'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Local Beta"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Local/Zero.Game.Local.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersionBeta'
+    allowPackageConflicts: true
+
+- task: NuGetCommand@2
+  displayName: 'Push NuGet'
+  inputs:
+    command: 'push'
+    packagesToPush: '$(Build.ArtifactStagingDirectory)/**/*.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.symbols.nupkg'
+    nuGetFeedType: 'internal'
+    publishVstsFeed: 'Zero Services/Zero'
+    versioningScheme: 'off'
+    allowPackageConflicts: true
+
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: 'nuget push "$(Build.ArtifactStagingDirectory)/**/*-beta.nupkg" -ApiKey $(nugetApiKey) -Source https://api.nuget.org/v3/index.json -NoSymbols'
