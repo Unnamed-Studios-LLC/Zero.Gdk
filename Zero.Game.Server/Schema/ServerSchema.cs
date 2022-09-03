@@ -2,14 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using Zero.Game.Common;
-using Zero.Game.Shared;
 
 namespace Zero.Game.Server
 {
     internal class ServerSchema : CommonSchema
     {
         private readonly List<ComponentDefinition> _sortedComponentDefinitions;
-        private readonly Dictionary<ushort, ComponentDefinition> _componentDefinitions;
+        private readonly Dictionary<Type, ComponentDefinition> _componentDefinitions;
 
         public ServerSchema(List<ComponentDefinition> componentDefinitions,
             List<DataDefinition> dataDefinitions) : base(dataDefinitions)
@@ -28,7 +27,7 @@ namespace Zero.Game.Server
             return new ComponentSystemCollection(systems);
         }
 
-        public ComponentDefinition GetComponentDefinition(ushort type)
+        public ComponentDefinition GetComponentDefinition(Type type)
         {
             if (!_componentDefinitions.TryGetValue(type, out var definition))
             {

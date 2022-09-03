@@ -17,6 +17,17 @@ namespace Zero.Game.Server
             return _dataState.GetData(type);
         }
 
+        public T GetData<T>() where T : IData
+        {
+            T def = default;
+            var data = _dataState.GetData(def.Type);
+            if (data == null)
+            {
+                return def;
+            }
+            return (T)data;
+        }
+
         public void PushPrivate(IData data)
         {
             _dataState.PushPrivate(data);

@@ -1,16 +1,17 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Zero.Game.Server
 {
     internal abstract class ComponentSystem
     {
-        public ComponentSystem(ushort type, uint worldId)
+        public ComponentSystem(Type type, uint worldId)
         {
             Type = type;
             WorldId = worldId;
         }
 
-        public ushort Type { get; }
+        public Type Type { get; }
         protected uint WorldId { get; }
 
         public abstract void Clear();
@@ -35,7 +36,7 @@ namespace Zero.Game.Server
         private readonly bool _overridesUpdate;
         private readonly bool _overridesViewUpdate;
 
-        public ComponentSystem(ushort type, uint worldId, bool overridesUpdate, bool overridesViewUpdate) : base(type, worldId)
+        public ComponentSystem(Type type, uint worldId, bool overridesUpdate, bool overridesViewUpdate) : base(type, worldId)
         {
             _overridesUpdate = overridesUpdate;
             _overridesViewUpdate = overridesViewUpdate;

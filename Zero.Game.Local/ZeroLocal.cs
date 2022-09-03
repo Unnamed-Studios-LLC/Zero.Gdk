@@ -36,6 +36,7 @@ namespace Zero.Game.Local
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup(x => new Startup(x.Configuration, setup));
+                    webBuilder.UseUrls("https://localhost:5001", "http://localhost:5000");
                 })
                 .ConfigureLogging(logging =>
                 {

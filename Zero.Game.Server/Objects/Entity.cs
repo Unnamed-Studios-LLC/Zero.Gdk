@@ -27,19 +27,6 @@ namespace Zero.Game.Server
             }
         }
 
-        public Component GetComponent(ushort type)
-        {
-            for (int i = 0; i < _components.Count; i++)
-            {
-                var component = _components[i];
-                if (component.Type == type)
-                {
-                    return component;
-                }
-            }
-            return null;
-        }
-
         public T GetComponent<T>()
             where T : Component
         {

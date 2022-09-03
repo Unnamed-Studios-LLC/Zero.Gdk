@@ -2,7 +2,7 @@
 
 namespace Zero.Game.Shared
 {
-    public struct Vec3
+    public struct Vec3 : ISerializable
     {
         public float X;
         public float Y;
@@ -51,6 +51,13 @@ namespace Zero.Game.Shared
         public override string ToString()
         {
             return $"({X}, {Y}, {Z})";
+        }
+
+        public void Serialize(ISerializer serializer)
+        {
+            X = serializer.Value(X);
+            Y = serializer.Value(Y);
+            Z = serializer.Value(Z);
         }
 
         public static Vec3 One => new Vec3(1, 1, 1);

@@ -14,8 +14,6 @@ namespace Zero.Game.Tests.Integration.World
 
         private class TestComponent : Component, IAsyncComponent
         {
-            public override ushort Type => 1;
-
             public Task OnDestroyAsync()
             {
                 return Task.CompletedTask;

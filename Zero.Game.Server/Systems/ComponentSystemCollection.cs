@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Zero.Game.Server
@@ -6,7 +7,7 @@ namespace Zero.Game.Server
     internal class ComponentSystemCollection
     {
         private readonly List<ComponentSystem> _componentSystems;
-        private readonly Dictionary<ushort, ComponentSystem> _componentSystemsMap;
+        private readonly Dictionary<Type, ComponentSystem> _componentSystemsMap;
 
         public ComponentSystemCollection(List<ComponentSystem> componentSystems)
         {
@@ -37,9 +38,10 @@ namespace Zero.Game.Server
 
         public void Register(Component component)
         {
-            if (!_componentSystemsMap.TryGetValue(component.Type, out var system))
+            var type = component.GetType();
+            if (!_componentSystemsMap.TryGetValue(type, out var system))
             {
-                Debug.LogError("Component {0} has not been defined in the Schema", component.GetType());
+                Debug.LogError("Component {0} has not been defined in the Schema", type);
                 return;
             }
 

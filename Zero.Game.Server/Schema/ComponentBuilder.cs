@@ -3,12 +3,11 @@
     public class ComponentBuilder<T>
         where T : Component
     {
-        private readonly ushort _type;
         private int _priority;
 
-        public ComponentBuilder(ushort type)
+        public ComponentBuilder()
         {
-            _type = type;
+
         }
 
         public ComponentBuilder<T> Priority(int priority)
@@ -19,7 +18,7 @@
 
         internal ComponentDefinition<T> Build()
         {
-            return new ComponentDefinition<T>(_type, _priority);
+            return new ComponentDefinition<T>(_priority);
         }
     }
 }

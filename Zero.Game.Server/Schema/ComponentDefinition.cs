@@ -5,33 +5,28 @@ namespace Zero.Game.Server
 {
     internal abstract class ComponentDefinition
     {
-        public ComponentDefinition(ushort type, int priority, Type componentType)
+        private static Type s_baseType = typeof(Component);
+
+        public ComponentDefinition(Type type, int priority)
         {
             Type = type;
             Priority = priority;
-            DetermineOverrides(componentType);
+            OverridesUpdate = type.GetMethod("OnUpdate", BindingFlags.NonPublic | BindingFlags.Instance).DeclaringType != s_baseType;
+            OverridesViewUpdate = type.GetMethod("OnViewUpdate", BindingFlags.NonPublic | BindingFlags.Instance).DeclaringType != s_baseType;
         }
 
-        public bool OverridesUpdate { get; set; }
-        public bool OverridesViewUpdate { get; set; }
-        public int Priority { get; set; }
-        public ushort Type { get; set; }
-
+        public Type Type { get; }
+        public int Priority { get; }
+        public bool OverridesUpdate { get; }
+        public bool OverridesViewUpdate { get; }
 
         public abstract ComponentSystem CreateSystem(uint worldId);
-
-        private void DetermineOverrides(Type componentType)
-        {
-            var baseType = typeof(Component);
-            OverridesUpdate = componentType.GetMethod("OnUpdate", BindingFlags.NonPublic | BindingFlags.Instance).DeclaringType != baseType;
-            OverridesViewUpdate = componentType.GetMethod("OnViewUpdate", BindingFlags.NonPublic | BindingFlags.Instance).DeclaringType != baseType;
-        }
     }
 
     internal class ComponentDefinition<T> : ComponentDefinition
         where T : Component
     {
-        public ComponentDefinition(ushort type, int priority) : base(type, priority, typeof(T))
+        public ComponentDefinition(int priority) : base(typeof(T), priority)
         {
         }
 

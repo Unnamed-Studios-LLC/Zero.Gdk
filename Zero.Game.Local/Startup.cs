@@ -8,13 +8,12 @@ using System;
 using Zero.Game.Local.Providers;
 using Zero.Game.Local.Services;
 using Zero.Game.Local.Services.Abstract;
-using Zero.Game.Local.Services.Hosted;
 using Zero.Game.Server;
 using Zero.Game.Shared;
 
 namespace Zero.Game.Local
 {
-    public class Startup
+    internal class Startup
     {
         public Startup(IConfiguration configuration, ServerSetup setup)
         {

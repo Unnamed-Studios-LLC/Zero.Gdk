@@ -8,7 +8,6 @@ namespace Zero.Game.Server
     {
         public Connection Connection => Entity as Connection;
         public Entity Entity { get; private set; }
-        public abstract ushort Type { get; }
         public World World => Entity?.World;
 
         internal bool Active => !RemovedFromEntity && !RemovedFromWorld && (Entity?.IsActive ?? false);
@@ -19,11 +18,6 @@ namespace Zero.Game.Server
         public void AddComponent(Component component)
         {
             Entity.AddComponent(component);
-        }
-
-        public Component GetComponent(ushort type)
-        {
-            return Entity.GetComponent(type);
         }
 
         public T GetComponent<T>()
@@ -45,6 +39,20 @@ namespace Zero.Game.Server
         public void GetComponents<T>(List<T> list)
         {
             Entity.GetComponents(list);
+        }
+
+        public IData GetData(ushort type)
+        {
+            return Entity?.GetData(type);
+        }
+
+        public T GetData<T>() where T : IData
+        {
+            if (Entity == null)
+            {
+                return default;
+            }
+            return Entity.GetData<T>();
         }
 
         public void PushPrivate(IData data)

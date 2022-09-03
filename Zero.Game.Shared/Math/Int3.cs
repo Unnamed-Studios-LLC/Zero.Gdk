@@ -2,7 +2,7 @@
 
 namespace Zero.Game.Shared
 {
-    public struct Int3
+    public struct Int3 : ISerializable
     {
         public int X;
         public int Y;
@@ -44,6 +44,13 @@ namespace Zero.Game.Shared
         public override string ToString()
         {
             return $"({X}, {Y}, {Z})";
+        }
+
+        public void Serialize(ISerializer serializer)
+        {
+            X = serializer.Value(X);
+            Y = serializer.Value(Y);
+            Z = serializer.Value(Z);
         }
 
         public static Int3 Zero => new Int3(0, 0, 0);
