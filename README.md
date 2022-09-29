@@ -1,5 +1,7 @@
 # Zero Game Development Kit
 
+![zero-game-demo](.repo/game-demo.gif)
+
 **Zero Gdk** is a C# client/server game world development framework.
 
 # Features
