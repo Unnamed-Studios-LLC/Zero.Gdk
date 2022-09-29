@@ -15,15 +15,15 @@ namespace Zero.Game.Local
 {
     internal class Startup
     {
-        public Startup(IConfiguration configuration, ServerSetup setup)
+        public Startup(IConfiguration configuration, ServerPlugin plugin)
         {
             Configuration = configuration;
-            Setup = setup;
+            Plugin = plugin;
         }
 
         public IConfiguration Configuration { get; }
 
-        public ServerSetup Setup { get; }
+        public ServerPlugin Plugin { get; }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
@@ -33,7 +33,7 @@ namespace Zero.Game.Local
             // add providers
             services.AddTransient<IDeploymentProvider, LocalDeploymentProvider>();
             services.AddTransient<ILoggingProvider, GameLogger>();
-            //services.AddSingleton(Setup);
+            services.AddSingleton(Plugin);
 
             // add services
             services.AddScoped<IConnectionService, ConnectionService>();

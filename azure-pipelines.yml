@@ -12,8 +12,9 @@ pool:
 variables:
   buildConfiguration: 'Release'
   major: 0
-  minor: 0
-  patch: $[counter(variables['minor'], 0)] #this will reset when we bump minor
+  minor: 2
+  patchKey: $(major).$(minor)
+  patch: $[counter(variables['$(patchKey)'], 0)] #this will reset when we bump major/minor
   NugetVersionBeta: $(major).$(minor).$(patch)
   NugetVersion: $(major).$(minor).$(patch)-beta
 
@@ -34,13 +35,6 @@ steps:
     command: 'build'
     arguments: '--configuration $(buildConfiguration)'
     projects: 'Zero.Game.Shared/Zero.Game.Shared.csproj'
-
-- task: DotNetCoreCLI@2
-  displayName: 'Build Common'
-  inputs:
-    command: 'build'
-    arguments: '--configuration $(buildConfiguration)'
-    projects: 'Zero.Game.Common/Zero.Game.Common.csproj'
 
 - task: DotNetCoreCLI@2
   displayName: 'Build Client'
@@ -80,28 +74,6 @@ steps:
     command: 'pack'
     arguments: '--configuration $(buildConfiguration)'
     packagesToPack: 'Zero.Game.Shared/Zero.Game.Shared.csproj'
-    nobuild: true
-    versioningScheme: 'byEnvVar'
-    versionEnvVar: 'NugetVersionBeta'
-    allowPackageConflicts: true
-
-- task: DotNetCoreCLI@2
-  displayName: "Pack Common"
-  inputs:
-    command: 'pack'
-    arguments: '--configuration $(buildConfiguration)'
-    packagesToPack: 'Zero.Game.Common/Zero.Game.Common.csproj'
-    nobuild: true
-    versioningScheme: 'byEnvVar'
-    versionEnvVar: 'NugetVersion'
-    allowPackageConflicts: true
-
-- task: DotNetCoreCLI@2
-  displayName: "Pack Common Beta"
-  inputs:
-    command: 'pack'
-    arguments: '--configuration $(buildConfiguration)'
-    packagesToPack: 'Zero.Game.Common/Zero.Game.Common.csproj'
     nobuild: true
     versioningScheme: 'byEnvVar'
     versionEnvVar: 'NugetVersionBeta'

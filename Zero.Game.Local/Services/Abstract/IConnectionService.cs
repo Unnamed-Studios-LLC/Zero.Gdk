@@ -1,5 +1,6 @@
 ﻿using UnnamedStudios.Common.Model;
-using Zero.Game.Common;
+using Zero.Game.Shared;
+using Zero.Game.Server;
 
 namespace Zero.Game.Local.Services.Abstract
 {

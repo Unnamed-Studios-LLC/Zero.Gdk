@@ -2,8 +2,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Console;
+using Microsoft.Extensions.Options;
 using System;
+using System.IO;
 using System.Threading.Tasks;
+using Zero.Game.Local.Logging;
 using Zero.Game.Local.Providers;
 using Zero.Game.Local.Services.Hosted;
 using Zero.Game.Server;
@@ -13,12 +18,14 @@ namespace Zero.Game.Local
 {
     public class ZeroLocal
     {
-        public static async Task RunAsync<TSetup>(string[] args)
-            where TSetup : ServerSetup, new()
+        internal static ZeroServer Server { get; set; }
+
+        public static async Task RunAsync<TPlugin>(string[] args)
+            where TPlugin : ServerPlugin, new()
         {
-            var setup = new TSetup();
-            var aspNetHost = CreateHostBuilder(args, setup).Build();
-            var zeroServerHost = CreateZeroGameBuilder(args, setup).Build();
+            var plugin = new TPlugin();
+            var aspNetHost = CreateHostBuilder(args, plugin).Build();
+            var zeroServerHost = CreateZeroGameBuilder(args, plugin).Build();
 
             var aspNetLifetime = aspNetHost.Services.GetService<IHostApplicationLifetime>();
             var zeroServerLifetime = zeroServerHost.Services.GetService<IHostApplicationLifetime>();
@@ -31,29 +38,25 @@ namespace Zero.Game.Local
                 .ConfigureAwait(false);
         }
 
-        public static IHostBuilder CreateHostBuilder(string[] args, ServerSetup setup) =>
+        public static IHostBuilder CreateHostBuilder(string[] args, ServerPlugin plugin) =>
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseStartup(x => new Startup(x.Configuration, setup));
+                    webBuilder.UseStartup(x => new Startup(x.Configuration, plugin));
                     webBuilder.UseUrls("https://localhost:5001", "http://localhost:5000");
                 })
-                .ConfigureLogging(logging =>
-                {
-                    logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
-                    logging.AddFilter("Microsoft.*", x => false);
-                });
+                .ConfigureLogging(logging => logging.ClearProviders());
 
-        public static IHostBuilder CreateZeroGameBuilder(string[] args, ServerSetup setup) =>
+        public static IHostBuilder CreateZeroGameBuilder(string[] args, ServerPlugin plugin) =>
             Host.CreateDefaultBuilder(args)
                 .ConfigureServices(services =>
                 {
-                    services.Configure<HostOptions>(opts => opts.ShutdownTimeout = TimeSpan.FromSeconds(15));
+                    services.Configure<HostOptions>(opts => opts.ShutdownTimeout = TimeSpan.FromSeconds(20));
 
                     // add providers
                     services.AddTransient<IDeploymentProvider, LocalDeploymentProvider>();
                     services.AddTransient<ILoggingProvider, GameLogger>();
-                    services.AddSingleton(setup);
+                    services.AddSingleton(plugin);
 
                     // add hosted
                     services.AddTransient<GameService>();
@@ -62,8 +65,10 @@ namespace Zero.Game.Local
                 })
                 .ConfigureLogging(logging =>
                 {
-                    logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
-                    logging.AddFilter("Microsoft.*", x => false);
+                    //logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
+                    logging.ClearProviders();
+                    logging.AddConsole(options => options.FormatterName = nameof(ZeroConsoleFormatter))
+                        .AddConsoleFormatter<ZeroConsoleFormatter, ConsoleFormatterOptions>();
                 });
     }
 }

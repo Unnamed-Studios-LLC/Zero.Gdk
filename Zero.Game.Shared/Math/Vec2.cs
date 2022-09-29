@@ -1,10 +1,14 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 
 namespace Zero.Game.Shared
 {
-    public struct Vec2 : ISerializable
+    [StructLayout(LayoutKind.Explicit, Size = 8)]
+    public struct Vec2
     {
+        [FieldOffset(0)]
         public float X;
+        [FieldOffset(4)]
         public float Y;
 
         public Vec2(float x, float y) : this()
@@ -64,12 +68,6 @@ namespace Zero.Game.Shared
         public override string ToString()
         {
             return $"({X}, {Y})";
-        }
-
-        public void Serialize(ISerializer serializer)
-        {
-            X = serializer.Value(X);
-            Y = serializer.Value(Y);
         }
 
         public static Vec2 One => new Vec2(1, 1);

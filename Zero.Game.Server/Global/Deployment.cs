@@ -1,10 +1,11 @@
 ﻿using System.Threading.Tasks;
-using Zero.Game.Common;
 
 namespace Zero.Game.Server
 {
     public static class Deployment
     {
+        public static string HostIp => ServerDomain.DeploymentProvider.GetHost();
+
         public static Task<StartConnectionResponse> StartConnectionAsync(StartConnectionRequest request)
         {
             return ServerDomain.DeploymentProvider.StartConnectionAsync(request);

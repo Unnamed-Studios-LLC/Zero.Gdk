@@ -1,7 +1,16 @@
-﻿namespace Zero.Game.Shared
+﻿using System.Runtime.InteropServices;
+
+namespace Zero.Game.Shared
 {
+    [StructLayout(LayoutKind.Explicit, Size = 12)]
     public struct Circle
     {
+        [FieldOffset(0)]
+        public float X;
+        [FieldOffset(4)]
+        public float Y;
+        [FieldOffset(8)]
+        public float Radius;
 
         public Circle(float x, float y, float radius)
         {
@@ -20,9 +29,6 @@
             get => new Vec2(X, Y);
             set => (X, Y) = (value.X, value.Y);
         }
-        public float X { get; set; }
-        public float Y { get; set; }
-        public float Radius { get; set; }
 
         public bool Contains(Vec2 point)
         {

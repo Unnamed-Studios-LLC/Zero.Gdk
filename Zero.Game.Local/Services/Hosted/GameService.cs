@@ -12,29 +12,30 @@ namespace Zero.Game.Local.Services.Hosted
     {
         private Thread _executionThread;
         private readonly TaskCompletionSource<bool> _stopped = new();
+        private readonly CancellationTokenSource _cancellationTokenSource = new();
 
         private readonly ILogger<GameService> _logger;
         private readonly IHostApplicationLifetime _lifetime;
-        private readonly ServerSetup _serverSetup;
+        private readonly ServerPlugin _serverPlugin;
         private readonly IDeploymentProvider _deploymentProvider;
         private readonly ILoggingProvider _loggingProvider;
 
         public GameService(ILogger<GameService> logger,
             IHostApplicationLifetime lifetime,
-            ServerSetup serverSetup,
+            ServerPlugin serverPlugin,
             IDeploymentProvider deploymentProvider,
             ILoggingProvider loggingProvider)
         {
             _logger = logger;
             _lifetime = lifetime;
-            _serverSetup = serverSetup;
+            _serverPlugin = serverPlugin;
             _deploymentProvider = deploymentProvider;
             _loggingProvider = loggingProvider;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            if (_serverSetup == null)
+            if (_serverPlugin == null)
             {
                 _logger.LogError("Failed to start deployment. Unable to load valid build");
                 Environment.ExitCode = 1;
@@ -42,16 +43,15 @@ namespace Zero.Game.Local.Services.Hosted
                 return;
             }
 
-            ZeroServer.Setup(_serverSetup, _deploymentProvider, _loggingProvider);
+            ZeroLocal.Server = ZeroServer.Create(_loggingProvider, _deploymentProvider, _serverPlugin);
 
             Debug.LogInfo("Starting server...");
-
-            await _serverSetup.StartWorkerAsync()
-                .ConfigureAwait(false);
-            await _serverSetup.StartDeploymentAsync()
-                .ConfigureAwait(false);
-
             Debug.LogInfo("Press Ctrl+C to stop");
+
+            await _serverPlugin.StartWorkerAsync()
+                .ConfigureAwait(false);
+            await _serverPlugin.StartDeploymentAsync()
+                .ConfigureAwait(false);
 
             _executionThread = new Thread(Run)
             {
@@ -64,21 +64,25 @@ namespace Zero.Game.Local.Services.Hosted
         {
             Debug.LogInfo("Stopping server...");
 
-            ZeroServer.Stop();
+            _cancellationTokenSource.Cancel();
+
             await _stopped.Task
                 .ConfigureAwait(false);
 
-            await _serverSetup.StopDeploymentAsync()
+            await _serverPlugin.StopDeploymentAsync()
                 .ConfigureAwait(false);
-            await _serverSetup.StopWorkerAsync()
+            await _serverPlugin.StopWorkerAsync()
                 .ConfigureAwait(false);
+
+            _cancellationTokenSource.Dispose();
         }
 
         private void Run()
         {
+            var server = ZeroLocal.Server;
             try
             {
-                ZeroServer.Run();
+                server.Run(_cancellationTokenSource.Token);
             }
             catch (Exception e)
             {

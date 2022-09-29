@@ -9,14 +9,19 @@
     <Copyright>2022 Unnamed Studios, LLc</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
+    <PackageProjectUrl>https://github.com/Unnamed-Studios-LLC/Zero.Gdk</PackageProjectUrl>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
-    <ProjectReference Include="..\Zero.Game.Common\Zero.Game.Common.csproj" />
+    <ProjectReference Include="..\Zero.Game.Shared\Zero.Game.Shared.csproj" />
   </ItemGroup>
 
 </Project>

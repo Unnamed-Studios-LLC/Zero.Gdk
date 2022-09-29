@@ -3,7 +3,7 @@ using UnnamedStudios.Common.Model;
 using Zero.Game.Local.Services.Abstract;
 using Zero.Game.Server;
 using System.Net.Sockets;
-using Zero.Game.Common;
+using Zero.Game.Shared;
 
 namespace Zero.Game.Local.Services
 {
@@ -23,7 +23,7 @@ namespace Zero.Game.Local.Services
                 ClientIp = request.ClientIp,
             };
 
-            var connectionResponse = ZeroServer.Node.AddConnection(data);
+            var connectionResponse = ZeroLocal.Server.OpenConnection(data);
             if (!connectionResponse.Started)
             {
                 Debug.LogError("Failed to start connection, reason {0}", connectionResponse?.FailReason);

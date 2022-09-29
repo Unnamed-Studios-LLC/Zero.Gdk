@@ -8,28 +8,23 @@ namespace Zero.Game.Server
 {
     public static class Random
     {
-        private readonly static ThreadLocal<InternalRandom> s_randomPool = new ThreadLocal<InternalRandom>(() => new InternalRandom());
+        private readonly static ThreadLocal<InternalRandom> s_randomPool = new(() => new InternalRandom());
 
         private static InternalRandom LocalRandom => s_randomPool.Value;
 
         public static float Degree() => LocalRandom.Degree();
 
         public static float Float01() => LocalRandom.Float01();
-
         public static float FloatRange(float min, float max) => LocalRandom.FloatRange(min, max);
 
         public static int Int() => LocalRandom.Int();
-
         public static int IntRange(int min, int max) => LocalRandom.IntRange(min, max);
 
         public static float Radian() => LocalRandom.Radian();
 
         public static string String(int length, char[] characterPool) => LocalRandom.String(length, characterPool);
-
         public static string StringAlphabet(int length) => LocalRandom.StringAlphabet(length);
-
         public static string StringAlphaNumeric(int length) => LocalRandom.StringAlphaNumeric(length);
-
         public static string StringNumeric(int length) => LocalRandom.StringNumeric(length);
 
         private class InternalRandom
@@ -38,7 +33,7 @@ namespace Zero.Game.Server
             private readonly static char[] s_numeric = "0123456789".ToCharArray();
             private readonly static char[] s_alphaNumeric = s_alphabet.Concat(s_numeric).ToArray();
 
-            private readonly System.Random _random = new System.Random((int)DateTime.Now.Ticks);
+            private readonly System.Random _random = new((int)DateTime.Now.Ticks);
 
             public float Degree()
             {

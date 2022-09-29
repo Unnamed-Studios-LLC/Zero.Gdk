@@ -7,9 +7,9 @@ namespace Zero.Game.Local.Providers
 {
     public class GameLogger : ILoggingProvider
     {
-        private readonly ILogger<Node> _logger;
+        private readonly ILogger<ZeroServer> _logger;
 
-        public GameLogger(ILogger<Node> logger)
+        public GameLogger(ILogger<ZeroServer> logger)
         {
             _logger = logger;
         }

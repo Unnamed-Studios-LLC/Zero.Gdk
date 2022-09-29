@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Zero.Game.Local.Services.Abstract;
-using Zero.Game.Common;
+using Zero.Game.Server;
 
 namespace Zero.Game.Local.Controllers
 {

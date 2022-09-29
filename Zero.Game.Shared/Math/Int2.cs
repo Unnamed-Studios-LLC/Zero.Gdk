@@ -1,10 +1,14 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 
 namespace Zero.Game.Shared
 {
-    public struct Int2 : ISerializable
+    [StructLayout(LayoutKind.Explicit, Size = 12)]
+    public struct Int2
     {
+        [FieldOffset(0)]
         public int X;
+        [FieldOffset(4)]
         public int Y;
 
         public Int2(int x, int y) : this()
@@ -42,12 +46,6 @@ namespace Zero.Game.Shared
         public override string ToString()
         {
             return $"({X}, {Y})";
-        }
-
-        public void Serialize(ISerializer serializer)
-        {
-            X = serializer.Value(X);
-            Y = serializer.Value(Y);
         }
 
         public static Int2 Zero => new Int2(0, 0);

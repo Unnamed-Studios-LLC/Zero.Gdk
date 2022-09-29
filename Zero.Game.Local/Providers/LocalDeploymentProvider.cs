@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using System.Threading.Tasks;
-using Zero.Game.Common;
 using Zero.Game.Server;
 
 namespace Zero.Game.Local.Providers
@@ -8,17 +7,22 @@ namespace Zero.Game.Local.Providers
     public class LocalDeploymentProvider : IDeploymentProvider
     {
         private uint _nextWorldId = 10000;
-        private readonly ConcurrentDictionary<uint, uint> _usedWorldIds = new ConcurrentDictionary<uint, uint>();
+        private readonly ConcurrentDictionary<uint, uint> _usedWorldIds = new();
+
+        public string GetHost()
+        {
+            return "127.0.0.1";
+        }
 
         public Task<StartConnectionResponse> StartConnectionAsync(StartConnectionRequest request)
         {
-            var response = ZeroServer.Node.AddConnection(request);
+            var response = ZeroLocal.Server.OpenConnection(request);
             if (!response.Started)
             {
                 return Task.FromResult(response);
             }
 
-            return Task.FromResult(new StartConnectionResponse("127.0.0.1", response.Port, response.Key));
+            return Task.FromResult(new StartConnectionResponse(GetHost(), response.Port, response.Key));
         }
 
         public async Task<StartWorldResponse> StartWorldAsync(StartWorldRequest request)
@@ -39,14 +43,14 @@ namespace Zero.Game.Local.Providers
                 return WorldFailReason.WorldIdTaken;
             }
 
-            var response = await ZeroServer.Node.AddWorldAsync(request)
+            var response = await ZeroLocal.Server.AddWorldAsync(request)
                 .ConfigureAwait(false);
             return response;
         }
 
         public async Task StopWorldAsync(uint worldId)
         {
-            await ZeroServer.Node.RemoveWorldAsync(worldId)
+            await ZeroLocal.Server.RemoveWorldAsync(worldId)
                 .ConfigureAwait(false);
             _usedWorldIds.TryRemove(worldId, out _);
         }

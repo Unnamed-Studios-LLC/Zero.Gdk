@@ -1,11 +1,16 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 
 namespace Zero.Game.Shared
 {
-    public struct Vec3 : ISerializable
+    [StructLayout(LayoutKind.Explicit, Size = 12)]
+    public struct Vec3
     {
+        [FieldOffset(0)]
         public float X;
+        [FieldOffset(4)]
         public float Y;
+        [FieldOffset(8)]
         public float Z;
 
         public Vec3(float x, float y, float z) : this()
@@ -51,13 +56,6 @@ namespace Zero.Game.Shared
         public override string ToString()
         {
             return $"({X}, {Y}, {Z})";
-        }
-
-        public void Serialize(ISerializer serializer)
-        {
-            X = serializer.Value(X);
-            Y = serializer.Value(Y);
-            Z = serializer.Value(Z);
         }
 
         public static Vec3 One => new Vec3(1, 1, 1);

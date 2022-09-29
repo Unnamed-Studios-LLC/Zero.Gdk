@@ -1,4 +1,4 @@
-﻿using Zero.Game.Common;
+﻿using Zero.Game.Shared;
 
 namespace Zero.Game.Server
 {
@@ -6,7 +6,7 @@ namespace Zero.Game.Server
     {
         public static void AddMockConnection(StartConnectionRequest request)
         {
-            ZeroServer.Node?.AddMockConnection(request);
+            //ZeroServerOld.Node?.AddMockConnection(request);
         }
     }
 }

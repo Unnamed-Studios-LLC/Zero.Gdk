@@ -8,6 +8,7 @@
     <Copyright>2021 Unnamed Studios, LLC</Copyright>
     <Authors>Tucker Ulrich</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Unnamed-Studios-LLC/Zero.Gdk</PackageProjectUrl>
     <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 

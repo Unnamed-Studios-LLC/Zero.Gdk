@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 
@@ -6,6 +7,21 @@ namespace Zero.Game.Server
 {
     internal sealed class GameSynchronizationContext : SynchronizationContext
     {
+        public struct SyncScope : IDisposable
+        {
+            private readonly SynchronizationContext _context;
+
+            public SyncScope(SynchronizationContext context)
+            {
+                _context = context;
+            }
+
+            public void Dispose()
+            {
+                SynchronizationContext.SetSynchronizationContext(_context);
+            }
+        }
+
         private struct ActionRequest
         {
             private readonly SendOrPostCallback _callback;
@@ -51,15 +67,26 @@ namespace Zero.Game.Server
             _mainThreadId = mainThreadId;
         }
 
+        public static bool IsMainThread => Thread.CurrentThread.ManagedThreadId == Instance._mainThreadId;
+        private static GameSynchronizationContext Instance { get; set; }
+
         public static void Close(int msTimeout)
         {
             WaitForPending(msTimeout);
             SetSynchronizationContext(null);
         }
 
+        public static SyncScope CreateScope()
+        {
+            var current = Current;
+            SetSynchronizationContext(Instance);
+            return new SyncScope(current);
+        }
+
         public static void InitializeOnCurrentThread()
         {
-            SetSynchronizationContext(new GameSynchronizationContext(Thread.CurrentThread.ManagedThreadId));
+            Instance = new GameSynchronizationContext(Thread.CurrentThread.ManagedThreadId);
+            SetSynchronizationContext(Instance);
         }
 
         public static void Run()
