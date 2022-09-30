@@ -118,6 +118,9 @@ class Program
 }
 ```
 
+5. Next steps
+    - [Adding your first world](#adding-your-first-world)
+    
 That's it! Your server is up and running on localhost
 
 ### Connecting a client
@@ -162,17 +165,24 @@ ZeroClient Create(IPAddress address, int port, string key, IMessageHandler messa
     - Network update is typically less than your frame/client update. Typically synced with your servers update rate.
     - For Unity, you can use FixedUpdate for this
 
-# ECS
+# Worlds
 
-## Component Systems
+
+## Entities
 
 ## Components
 
+## Systems
+
 ## ForEach
+
+## Adding your first world
 
 # Networking
 
-## Data
+## Connections
+
+The **Connection** class represents a connected client and provides method 
 
 ## View Query
 
