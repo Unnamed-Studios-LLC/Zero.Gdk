@@ -134,7 +134,7 @@ Url
 ```
 https://localhost:4001/api/v1/connnection
 ```
-Request Body:
+Request Body (request body should be in json format)
 ```csharp
 public class StartConnectionRequest
 {
@@ -143,11 +143,10 @@ public class StartConnectionRequest
     public Dictionary<string, string> Data { get; set; }
 }
 ```
-Response Body:
+Response Body (response will be transmitted in json)
 ```csharp
 public class StartConnectionResponse
 {
-    public bool Started => !FailReason.HasValue;
     public ConnectionFailReason? FailReason { get; set; }
     public string WorkerIp { get; set; }
     public int Port { get; set; }
@@ -165,28 +164,53 @@ ZeroClient Create(IPAddress address, int port, string key, IMessageHandler messa
     - Network update is typically less than your frame/client update. Typically synced with your servers update rate.
     - For Unity, you can use FixedUpdate for this
 
-# Worlds
-
+# Architecture and Overview
 
 ## Entities
 
+A collection of related components and data. Entities do not have any object representation,
+instead entities are acted on by methods using a passed in **entity id**.
+
 ## Components
+
+An "information chunk". Typically houses data that is closely related or used by a given system.
 
 ## Systems
 
-## ForEach
+The logic and processes for components and entities. Systems update the game state and alter entity structure.
 
-## Adding your first world
+## Data
 
-# Networking
+Data is information about an entity that is transmitted to connections. Data can be attached to an entity as **persistent** or sent
+in a fire and forget **event**.
 
-## Connections
+## World
 
-The **Connection** class represents a connected client and provides method 
+A container for entities, systems, components, data, and connections.
 
-## View Query
+*An entity id is created for each world.
+You may use the entity id as usual, however, the GDK will handle create/destroy for the id*
+
+## Connection
+
+A connected client and its information.
+
+*An entity id is created for each connection.
+You may use the entity id as usual, however, the GDK will handle create/destroy for the id*
+
+## View
+
+A list of entity ids that a connection will receive data about.
 
 ## Message Handler
+
+Processes received data, required for both the client and server.
+
+# Adding your first world
+
+# Adding your first system, entity, and component
+
+# Transmitting entities to a connection
 
 # Misc
 
