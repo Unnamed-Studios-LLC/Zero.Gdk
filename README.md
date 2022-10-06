@@ -19,10 +19,11 @@
 
 You can install Gdk packages via nuget. There are four packages available.
 
-- **ZeroServices.Game.Shared** - Client/Server shared code
-- **ZeroServices.Game.Server** - Server integrations
-- **ZeroServices.Game.Client** - Client integrations
-- **ZeroServices.Game.Local** - Setting up a locally hosted server
+- `ZeroServices.Game.Shared` - Client/Server shared code
+- `ZeroServices.Game.Server` - Server integrations
+- `ZeroServices.Game.Client` - Client integrations
+- `ZeroServices.Game.Local` - Setting up a locally hosted server
+- `ZeroServices.Game.Model` - Http classes for communicating with the local or Zero hosted server
 
 ## Unity Client
 
@@ -39,72 +40,17 @@ https://github.com/Unnamed-Studios-LLC/Zero.Unity.git
 
 Server and client integration are centered around the **ServerPlugin** and **ClientPlugin** classes.
 Override these classes to add your implementation.
-### ServerPlugin
-```csharp
-// server options
-ServerOptions Options { get; set; }
 
-// add the connection to it's world (connections may be added/remove from worlds without load/unload being called)
-void AddToWorld(Connection connection);
+[ServerPlugin](/Zero.Game.Server/ServerPlugin.cs) `/Zero.Game.Server/ServerPlugin.cs`
 
-// build data definitions
-void BuildData(DataBuilder builder);
-
-// a deferred world start has completed
-Task DeferredWorldResponseAsync(StartWorldResponse response);
-
-// load a connection's data (load from database, etc.)
-Task<bool> LoadConnectionAsync(Connection connection);
-
-// load a world's data (database, files, etc.)
-Task<bool> LoadWorldAsync(World world);
-
-// remove a connection from a world
-void RemoveFromWorld(Connection connection);
-
-// starts a server deployment, typically houses initial Deployment.* calls.
-Task StartDeploymentAsync();
-
-// starts a server worker, called once per worker before any logic, typically sets up a workers environment
-Task StartWorkerAsync();
-
-// called when a deployment has stopped
-Task StopDeploymentAsync();
-
-// called when a worker has stopped
-Task StopWorkerAsync();
-
-// unloads a connection (save to database, etc.)
-Task UnloadConnectionAsync(Connection connection);
-
-// unloads a world
-Task UnloadWorldAsync(World world);
-```
-
-### ClientPlugin:
-```csharp
-// client options
-ClientOptions Options { get; set; }
-
-// build data definitions
-void BuildData(DataBuilder builder);
-
-// connected to server
-void Connected();
-
-// copnnecting to server
-void Connecting();
-
-// disconnected from server
-void Disconnected();
-```
+[ClientPlugin](/Zero.Game.Client/ClientPlugin.cs) `/Zero.Game.Client/ClientPlugin.cs`
 
 ## Quick start guide
 
-### Running a local server
+### Running a local game server
 
 1. Create a new console application project
-2. Install **ZeroServices.Game.Local** package
+2. Install `ZeroServices.Game.Local` package
 3. Create a subclass of ServerPlugin
 4. Call ZeroServer.Run, passing your plugin type as the generic parameter
 
@@ -124,45 +70,36 @@ class Program
 That's it! Your server is up and running on localhost
 
 ### Connecting a client
- 
-1. Install **ZeroServices.Game.Client** package (https://github.com/Unnamed-Studios-LLC/Zero.Unity.git if using unity)
+
+*Client-side*
+
+1. Install `ZeroServices.Game.Client` package (https://github.com/Unnamed-Studios-LLC/Zero.Unity.git if using unity)
 2. Create a subclass of ClientPlugin
 3. Create an implementation of ILoggingProvider
-4. Execute a POST HTTP request to the local server with a body of StartConnectionRequest class
 
-Url
-```
-https://localhost:4001/api/v1/connnection
-```
-Request Body (request body should be in json format)
-```csharp
-public class StartConnectionRequest
-{
-    public uint WorldId { get; set; }
-    public string ClientIp { get; set; }
-    public Dictionary<string, string> Data { get; set; }
-}
-```
-Response Body (response will be transmitted in json)
-```csharp
-public class StartConnectionResponse
-{
-    public ConnectionFailReason? FailReason { get; set; }
-    public string WorkerIp { get; set; }
-    public int Port { get; set; }
-    public string Key { get; set; }
-}
-```
+*Server-side*
 
-5. Use response information to call ZeroClient.Create, passing in the response information, [message handler](#message-handler), logging, and client plugin implementation.
+4. Create a program that acts as an intermediary between your clients and the game server
+    - This can be any program, a REST api made with ASP.NET is a great option
+    - For security reasons, an intermediary should be used, direct calls to the game world from clients is not recommended
+5. Install **ZeroServices.Game.Model** package
+6. Create a singleton instance of `ZeroGameClient` (cache and re-use, base url for local is `https://localhost:4001`)
+7. When a client request is received, call `ZeroGameClient.ConnectionStartAsync`
+8. Handle response and return ip, port, and key to client upon success
+
+*Client-side*
+
+9. Use ip, port, and key received from the intermediary program to call ZeroClient.Create, passing in the response information, [message handler](#message-handler), logging, and client plugin implementation.
 
 ```csharp
 ZeroClient Create(IPAddress address, int port, string key, IMessageHandler messageHandler, ILoggingProvider loggingProvider, ClientPlugin plugin);
 ```
 
-6. Stored the returned **ZeroClient** instance and call **Update** every network update
+10. Stored the returned **ZeroClient** instance and call **Update** every network update
     - Network update is typically less than your frame/client update. Typically synced with your servers update rate.
     - For Unity, you can use FixedUpdate for this
+11. Using the supplied message handler, process world, entity, and data message
+    - [How Message Handlers Work](#how-message-handlers-work)
 
 # Architecture and Overview
 
@@ -210,7 +147,15 @@ Processes received data, required for both the client and server.
 
 # Adding your first system, entity, and component
 
-# Transmitting entities to a connection
+## Component
+
+## Entity
+
+## System
+
+# Writing a view query
+
+# How message handlers work
 
 # Misc
 
