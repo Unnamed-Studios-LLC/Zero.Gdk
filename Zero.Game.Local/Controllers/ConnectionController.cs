@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Zero.Game.Local.Services.Abstract;
-using Zero.Game.Server;
+using System.Threading.Tasks;
+using Zero.Game.Local.Services;
+using Zero.Game.Model;
 
 namespace Zero.Game.Local.Controllers
 {
@@ -8,17 +9,17 @@ namespace Zero.Game.Local.Controllers
     [ApiController]
     public class ConnectionController : ControllerBase
     {
-        private readonly IConnectionService _connectionService;
+        private readonly ConnectionService _connectionService;
 
-        public ConnectionController(IConnectionService connectionService)
+        public ConnectionController(ConnectionService connectionService)
         {
             _connectionService = connectionService;
         }
 
         [HttpPost]
-        public IActionResult Start(StartConnectionRequest request)
+        public async Task<IActionResult> Start(StartConnectionRequest request)
         {
-            var serviceResponse = _connectionService.Start(request);
+            var serviceResponse = await _connectionService.StartAsync(request);
             return StatusCode(serviceResponse.StatusCode, serviceResponse.Object);
         }
     }

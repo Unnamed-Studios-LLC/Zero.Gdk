@@ -2,7 +2,6 @@
 {
     public enum NetworkMode
     {
-        Reliable,
-        Unreliable
+        Reliable
     }
 }

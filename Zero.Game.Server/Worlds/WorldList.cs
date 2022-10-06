@@ -1,6 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
+﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace Zero.Game.Server
 {
@@ -8,16 +7,30 @@ namespace Zero.Game.Server
     {
         private readonly Dictionary<uint, World> _worldMap = new();
         private readonly List<World> _worlds = new(100);
+        private readonly List<World> _parallelWorlds = new(100);
 
         public void Add(World world)
         {
-            _worlds.Add(world);
+            if (world.Parallel)
+            {
+                _parallelWorlds.Add(world);
+            }
+            else
+            {
+                _worlds.Add(world);
+            }
             _worldMap[world.Id] = world;
         }
 
-        public Span<World> GetWorlds()
+        public World[] GetAllWorlds()
         {
-            return CollectionsMarshal.AsSpan(_worlds);
+            return _worlds.Concat(_parallelWorlds).ToArray();
+        }
+
+
+        public List<World> GetParallelWorldsList()
+        {
+            return _parallelWorlds;
         }
 
         public List<World> GetWorldsList()
@@ -37,7 +50,14 @@ namespace Zero.Game.Server
                 return false;
             }
             _worldMap.Remove(worldId);
-            _worlds.Remove(world);
+            if (world.Parallel)
+            {
+                _parallelWorlds.Remove(world);
+            }
+            else
+            {
+                _worlds.Remove(world);
+            }
             return true;
         }
     }

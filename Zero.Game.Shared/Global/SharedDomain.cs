@@ -47,13 +47,9 @@ namespace Zero.Game.Shared
             LoggingProvider?.Log(level, $"{InternalLogPrefix}{format}", args, e);
         }
 
-        internal static void SetLogger(ILoggingProvider loggingProvider)
+        internal static void SetLogger(ILoggingProvider loggingProvider, LogLevel logLevel)
         {
             LoggingProvider = loggingProvider;
-        }
-
-        internal static void SetLogLevel(LogLevel logLevel)
-        {
             LogLevel = logLevel;
         }
 

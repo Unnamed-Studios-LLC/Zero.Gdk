@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using Zero.Game.Model;
 using Zero.Game.Shared;
 
 namespace Zero.Game.Server

@@ -7,7 +7,6 @@ using Microsoft.OpenApi.Models;
 using System;
 using Zero.Game.Local.Providers;
 using Zero.Game.Local.Services;
-using Zero.Game.Local.Services.Abstract;
 using Zero.Game.Server;
 using Zero.Game.Shared;
 
@@ -36,7 +35,7 @@ namespace Zero.Game.Local
             services.AddSingleton(Plugin);
 
             // add services
-            services.AddScoped<IConnectionService, ConnectionService>();
+            services.AddScoped<ConnectionService>();
 
             // add hosted
             //services.AddTransient<GameService>();

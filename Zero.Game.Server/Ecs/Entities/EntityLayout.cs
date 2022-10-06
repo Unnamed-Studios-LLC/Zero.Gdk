@@ -96,9 +96,9 @@ namespace Zero.Game.Server
             }
 
             j = 0;
-            for (int i = 0; i < reference.Group.NonZeroComponentListCount; i++)
+            for (int i = 0; i < reference.Group.ComponentListCount; i++)
             {
-                var sourceType = reference.Group.NonZeroComponentTypes[i];
+                var sourceType = reference.Group.ComponentTypes[i];
                 var list = chunk + reference.Group.ComponentListOffsets[i];
                 do
                 {

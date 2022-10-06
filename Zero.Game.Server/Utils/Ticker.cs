@@ -14,6 +14,7 @@ namespace Zero.Game.Server
         public Ticker(int tickInterval)
         {
             _tickInterval = tickInterval;
+            Delta = tickInterval;
         }
 
         public int Delta { get; private set; }

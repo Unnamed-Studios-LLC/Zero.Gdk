@@ -1,4 +1,4 @@
-﻿namespace Zero.Game.Server
+﻿namespace Zero.Game.Model
 {
     public enum WorldFailReason
     {
@@ -6,6 +6,7 @@
         LoadReturnedFalse,
         LoadThrewException,
         WorldIdTaken,
-        WorkerLimitReached
+        WorkerLimitReached,
+        OnStartWorldException
     }
 }

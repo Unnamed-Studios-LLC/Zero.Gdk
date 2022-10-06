@@ -91,6 +91,8 @@ namespace Zero.Game.Server
         {
             World = world;
             EntityId = world.Entities.CreateEntity();
+            World.Connections.Add(this);
+            World.Report();
             Query?.NewWorld();
 
             try
@@ -246,6 +248,14 @@ namespace Zero.Game.Server
                 SentBuffers.Enqueue(new ByteBuffer(copyBuffer, buffer.Count));
             }
             Socket.Send(buffer);
+        }
+
+        internal void UpdateTimeout(TimeSpan timeout)
+        {
+            if (DateTime.UtcNow - Socket.LastReceiveUtc > timeout)
+            {
+                ForciblyRemove("Client timed out");
+            }
         }
 
         internal void ViewQuery()

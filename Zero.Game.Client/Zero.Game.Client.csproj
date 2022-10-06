@@ -6,7 +6,7 @@
     <Authors>Tucker Ulrich</Authors>
     <Company>Unnamed Studios, LLC</Company>
     <Product>Zero Game Services</Product>
-    <Copyright>2022 Unnamed Studios, LLc</Copyright>
+    <Copyright>2022 Unnamed Studios, LLC</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
     <PackageProjectUrl>https://github.com/Unnamed-Studios-LLC/Zero.Gdk</PackageProjectUrl>

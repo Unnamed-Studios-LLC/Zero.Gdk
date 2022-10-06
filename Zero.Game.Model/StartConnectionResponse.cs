@@ -1,4 +1,4 @@
-﻿namespace Zero.Game.Server
+﻿namespace Zero.Game.Model
 {
     public class StartConnectionResponse
     {

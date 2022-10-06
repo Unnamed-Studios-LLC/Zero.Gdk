@@ -5,15 +5,12 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Zero.Game.Shared
 {
     internal sealed unsafe class ConnectionSocket
     {
         private const int SizeLength = 4;
-        private static readonly Task<bool> s_syncCompletedFalse = Task.FromResult(false);
-        private static readonly Task<bool> s_syncCompletedTrue = Task.FromResult(true);
 
         private readonly Socket _socket;
         private readonly object _bufferLock = new object();
@@ -58,11 +55,15 @@ namespace Zero.Game.Shared
             _receiveArgs.SetBuffer(0, 0);
 
             _sendArgs.Completed += ProcessSent;
+            LastReceiveUtc = DateTime.UtcNow;
+            LastSendUtc = DateTime.UtcNow;
         }
 
 
         public bool Connecting { get; private set; }
         public bool Connected => _socket.Connected;
+        public DateTime LastReceiveUtc { get; private set; }
+        internal DateTime LastSendUtc { get; private set; }
         public IPEndPoint RemoteEndPoint { get; private set; }
 
         private bool SizeReceived => _receivedSize >= 0;
@@ -122,7 +123,10 @@ namespace Zero.Game.Shared
                 _receiveArgs.SetBuffer(_sizeBuffer, 0, 4);
                 if (!_socket.ReceiveAsync(_receiveArgs))
                 {
-                    ThreadPool.QueueUserWorkItem(x => ProcessReceived(null, (SocketAsyncEventArgs)x), _receiveArgs);
+                    if (!ThreadPool.QueueUserWorkItem(x => ProcessReceived(null, (SocketAsyncEventArgs)x), _receiveArgs))
+                    {
+                        Debug.LogError("Failed to enqueue receive work");
+                    }
                 }
             }
             catch (ObjectDisposedException) { }
@@ -150,6 +154,7 @@ namespace Zero.Game.Shared
         {
             lock (_sendLock)
             {
+                LastSendUtc = DateTime.UtcNow;
                 _sendQueue.Enqueue(buffer);
                 if (_sending)
                 {
@@ -158,7 +163,10 @@ namespace Zero.Game.Shared
                 _sending = true;
             }
 
-            ThreadPool.QueueUserWorkItem(x => SendNext(), null);
+            if (!ThreadPool.QueueUserWorkItem(x => SendNext(), null))
+            {
+                Debug.LogError("Failed to enqueue send work");
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -184,6 +192,8 @@ namespace Zero.Game.Shared
         {
             if (connectArgs.SocketError == SocketError.Success)
             {
+                LastReceiveUtc = DateTime.UtcNow;
+                LastSendUtc = DateTime.UtcNow;
                 Send(new ByteBuffer(_key, _key.Length));
                 StartReceive();
             }
@@ -239,6 +249,7 @@ namespace Zero.Game.Shared
                             // payload received, queue buffer for processing
                             lock (_receiveLock)
                             {
+                                LastReceiveUtc = DateTime.UtcNow;
                                 _receiveQueueSize += _received;
                                 if (_receiveQueueSize > _maxReceiveQueueSize)
                                 {

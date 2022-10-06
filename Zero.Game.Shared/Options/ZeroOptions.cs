@@ -2,8 +2,11 @@
 {
     public abstract class ZeroOptions
     {
-        public InternalOptions InternalOptions { get; set; } = new InternalOptions();
+        public InternalOptions InternalOptions { get; } = new InternalOptions();
+        /// <summary>
+        /// The minimum log level for console files
+        /// </summary>
         public LogLevel LogLevel { get; set; } = LogLevel.Information;
-        public NetworkingOptions NetworkingOptions { get; set; } = new NetworkingOptions();
+        public NetworkingOptions NetworkingOptions { get; } = new NetworkingOptions();
     }
 }

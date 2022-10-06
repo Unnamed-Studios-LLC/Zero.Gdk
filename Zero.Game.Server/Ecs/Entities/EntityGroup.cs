@@ -16,6 +16,9 @@ namespace Zero.Game.Server
             NonZeroComponentTypes = archetype.GetNonZeroComponentTypes(out var nonZeroCount);
             NonZeroComponentListCount = nonZeroCount;
 
+            ComponentTypes = archetype.GetComponentTypes(out var count);
+            ComponentListCount = count;
+
             ComponentSizes = GetComponentSizes();
             ChunkCapacity = GetChunkCapacity();
             ComponentListOffsets = GetComponentListOffsets();
@@ -24,8 +27,10 @@ namespace Zero.Game.Server
         public EntityArchetype Archetype { get; }
         public List<IntPtr> Chunks { get; } = new();
         public int ChunkCapacity { get; }
+        public int ComponentListCount { get; }
         public int* ComponentListOffsets { get; }
         public int* ComponentSizes { get; }
+        public int* ComponentTypes { get; }
         public int NonZeroComponentListCount { get; }
         public int* NonZeroComponentTypes { get; }
 
@@ -47,6 +52,10 @@ namespace Zero.Game.Server
             if (ComponentSizes != null)
             {
                 Marshal.FreeHGlobal(new IntPtr(ComponentSizes));
+            }
+            if (ComponentTypes != null)
+            {
+                Marshal.FreeHGlobal(new IntPtr(ComponentTypes));
             }
             if (NonZeroComponentTypes != null)
             {

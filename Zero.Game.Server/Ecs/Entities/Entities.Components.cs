@@ -266,9 +266,9 @@ namespace Zero.Game.Server
 
             if (reference.Group != null)
             {
-                for (int i = 0; i < reference.Group.NonZeroComponentListCount; i++)
+                for (int i = 0; i < reference.Group.ComponentListCount; i++)
                 {
-                    TypeCache.RemoveEventPublishers[reference.Group.NonZeroComponentTypes[i]](this, entityId, in reference);
+                    TypeCache.RemoveEventPublishers[reference.Group.ComponentTypes[i]](this, entityId, in reference);
                 }
 
                 var remappedEntity = reference.Group.Remove(reference.ChunkIndex, reference.ListIndex);

@@ -9,6 +9,9 @@ namespace Zero.Game.Server
 {
     public unsafe partial class Entities
     {
+        internal static bool AllowStructuralChange = true;
+        internal bool RunningInParallel = false;
+
         private readonly List<EntityGroup> _groups = new();
         private readonly CompositeKeyDictionary<ulong, EntityGroup> _groupLocator = new();
         private readonly Dictionary<uint, EntityReference> _entityLocationMap = new();
@@ -174,6 +177,12 @@ namespace Zero.Game.Server
 
         private unsafe void ParallelForEach<T>(T query) where T : IQuery
         {
+            if (RunningInParallel)
+            {
+                ForEach(query);
+                return;
+            }
+
             _iterating = true;
             try
             {
@@ -232,7 +241,7 @@ namespace Zero.Game.Server
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ThrowIfIterating()
         {
-            if (!_iterating)
+            if (!_iterating && AllowStructuralChange)
             {
                 return;
             }

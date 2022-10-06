@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Zero.Game.Server
+namespace Zero.Game.Model
 {
     public class StartConnectionRequest
     {

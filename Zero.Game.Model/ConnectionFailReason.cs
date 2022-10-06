@@ -1,10 +1,12 @@
-﻿namespace Zero.Game.Server
+﻿namespace Zero.Game.Model
 {
     public enum ConnectionFailReason
     {
         InternalError,
         WorldNotFound,
         InvalidClientIpAddress,
-        PerIpRateExceeded
+        PerIpRateExceeded,
+        OnStartConnectionException,
+        MaxConnectionsReached
     }
 }

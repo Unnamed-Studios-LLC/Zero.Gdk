@@ -37,6 +37,13 @@ steps:
     projects: 'Zero.Game.Shared/Zero.Game.Shared.csproj'
 
 - task: DotNetCoreCLI@2
+  displayName: 'Build Model'
+  inputs:
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
+    projects: 'Zero.Game.Model/Zero.Game.Model.csproj'
+
+- task: DotNetCoreCLI@2
   displayName: 'Build Client'
   inputs:
     command: 'build'
@@ -74,6 +81,28 @@ steps:
     command: 'pack'
     arguments: '--configuration $(buildConfiguration)'
     packagesToPack: 'Zero.Game.Shared/Zero.Game.Shared.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersionBeta'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Model"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Model/Zero.Game.Model.csproj'
+    nobuild: true
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: 'NugetVersion'
+    allowPackageConflicts: true
+
+- task: DotNetCoreCLI@2
+  displayName: "Pack Model Beta"
+  inputs:
+    command: 'pack'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: 'Zero.Game.Model/Zero.Game.Model.csproj'
     nobuild: true
     versioningScheme: 'byEnvVar'
     versionEnvVar: 'NugetVersionBeta'

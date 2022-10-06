@@ -17,7 +17,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Zero.Game.Local", "Zero.Gam
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Zero.Game.Benchmark", "Zero.Game.Benchmark\Zero.Game.Benchmark.csproj", "{405CF1C1-CF59-40D9-8698-4552099E065C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zero.Game.Mock", "Zero.Game.Mock\Zero.Game.Mock.csproj", "{3B9D76A6-998D-4453-9E8B-5CEAAE39B8F5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Zero.Game.Mock", "Zero.Game.Mock\Zero.Game.Mock.csproj", "{3B9D76A6-998D-4453-9E8B-5CEAAE39B8F5}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Zero.Game.Model", "Zero.Game.Model\Zero.Game.Model.csproj", "{46CE8C97-A2BB-4ECA-B41E-99FC4CA8AB64}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -53,6 +55,10 @@ Global
 		{3B9D76A6-998D-4453-9E8B-5CEAAE39B8F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3B9D76A6-998D-4453-9E8B-5CEAAE39B8F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3B9D76A6-998D-4453-9E8B-5CEAAE39B8F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{46CE8C97-A2BB-4ECA-B41E-99FC4CA8AB64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46CE8C97-A2BB-4ECA-B41E-99FC4CA8AB64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46CE8C97-A2BB-4ECA-B41E-99FC4CA8AB64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46CE8C97-A2BB-4ECA-B41E-99FC4CA8AB64}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

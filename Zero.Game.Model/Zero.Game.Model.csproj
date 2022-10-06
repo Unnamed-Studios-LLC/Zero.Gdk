@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <PackageId>ZeroServices.Game.Shared</PackageId>
+    <PackageId>ZeroServices.Game.Model</PackageId>
     <Authors>Tucker Ulrich</Authors>
     <Company>Unnamed Studios, LLC</Company>
     <Product>Zero Game Services</Product>
@@ -12,16 +12,14 @@
     <PackageProjectUrl>https://github.com/Unnamed-Studios-LLC/Zero.Gdk</PackageProjectUrl>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
+    <None Remove="World\" />
+    <None Remove="ZeroEngine.Api.Model" />
+    <None Remove="ZeroEngine.Core.Model" />
+    <None Remove="ZeroEngine.ServiceApi.Model" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ZeroServices.Core.Model" Version="1.0.122" />
+  </ItemGroup>
 </Project>

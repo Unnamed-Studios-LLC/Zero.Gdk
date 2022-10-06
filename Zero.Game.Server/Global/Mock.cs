@@ -1,12 +1,13 @@
-﻿using Zero.Game.Shared;
+﻿using System;
+using Zero.Game.Model;
 
 namespace Zero.Game.Server
 {
     public static class Mock
     {
-        public static void AddMockConnection(StartConnectionRequest request)
+        public static void AddConnection(StartConnectionRequest request)
         {
-            //ZeroServerOld.Node?.AddMockConnection(request);
+            throw new NotImplementedException();
         }
     }
 }

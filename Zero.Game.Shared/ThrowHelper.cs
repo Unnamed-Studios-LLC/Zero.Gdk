@@ -19,5 +19,11 @@ namespace Zero.Game.Shared
                 throw new Exception($"Data {typeof(T).FullName} has not been defined in the DataBuilder");
             }
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void ThrowWorldInParallel()
+        {
+            throw new Exception("Unable to enter ParallelForEach, the executing world is marked as Parallel update");
+        }
     }
 }

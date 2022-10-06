@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Zero.Game.Shared;
 
 [assembly: InternalsVisibleTo("Zero.Game.Tests")]
@@ -50,6 +51,16 @@ namespace Zero.Game.Client
 
         public static ZeroClient Create(IPAddress address, int port, string key, IMessageHandler messageHandler, ILoggingProvider loggingProvider, ClientPlugin plugin)
         {
+            if (address is null)
+            {
+                throw new ArgumentNullException(nameof(address));
+            }
+
+            if (key is null)
+            {
+                throw new ArgumentNullException(nameof(key));
+            }
+
             if (loggingProvider is null)
             {
                 throw new ArgumentNullException(nameof(loggingProvider));
@@ -60,33 +71,11 @@ namespace Zero.Game.Client
                 throw new ArgumentNullException(nameof(plugin));
             }
 
-            // set logger
-            SharedDomain.SetLogger(loggingProvider);
-
             // get options
             var options = plugin.Options;
 
-            // check options
-            if (options == null)
-            {
-                options = new ClientOptions();
-                Debug.Log(LogLevel.Warning, "Options received from plugin are null, using default options");
-            }
-
-            // set log level
-            SharedDomain.SetLogLevel(options.LogLevel);
-
-            if (options.InternalOptions == null)
-            {
-                options.InternalOptions = new InternalOptions();
-                Debug.Log(LogLevel.Warning, "Internal options from plugin are null, using default internal options");
-            }
-
-            if (options.NetworkingOptions == null)
-            {
-                options.NetworkingOptions = new NetworkingOptions();
-                Debug.Log(LogLevel.Warning, "Networking options from plugin are null, using default networking options");
-            }
+            // set logger
+            SharedDomain.SetLogger(loggingProvider, options.LogLevel);
 
             var dataBuilder = new DataBuilder();
             plugin.BuildData(dataBuilder);
@@ -292,6 +281,10 @@ namespace Zero.Game.Client
 
                     _socket.Send(new ByteBuffer(sendBuffer, dataLength));
                 }
+            }
+            catch (Exception)
+            {
+                ForciblyDisconnect("A fault occurred while writing client send data");
             }
             finally
             {

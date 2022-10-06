@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Zero.Game.Model;
 using Zero.Game.Shared;
 
 [assembly: InternalsVisibleTo("Zero.Game.Benchmark")]
@@ -45,6 +46,8 @@ namespace Zero.Game.Server
         private readonly int _sendBufferSize;
         private readonly int _receiveBufferSize;
         private readonly int _receiveMaxQueueSize;
+        private readonly TimeSpan _clientTimeout;
+        private readonly int _maxConnections;
         private uint _connectionViewOffset;
         private bool _stopped = false;
         private bool _running = false;
@@ -59,6 +62,8 @@ namespace Zero.Game.Server
             _sendBufferSize = options.NetworkingOptions.ServerBufferSize;
             _receiveBufferSize = options.NetworkingOptions.ClientBufferSize;
             _receiveMaxQueueSize = options.NetworkingOptions.ServerMaxReceiveQueueSize;
+            _clientTimeout = TimeSpan.FromMilliseconds(options.NetworkingOptions.ReceiveTimeoutMs);
+            _maxConnections = options.MaxConnections;
         }
 
         public static ZeroServer Create(ILoggingProvider loggingProvider, IDeploymentProvider deploymentProvider, ServerPlugin plugin)
@@ -78,37 +83,17 @@ namespace Zero.Game.Server
                 throw new ArgumentNullException(nameof(plugin));
             }
 
-            // set logger
-            SharedDomain.SetLogger(loggingProvider);
 
             // get options
             var options = plugin.Options;
 
+            // setup logging
+            Setup(loggingProvider, deploymentProvider, plugin);
+
             // check options
-            if (options == null)
-            {
-                options = new();
-                Console.WriteLine(LogHeader);
-                Debug.Log(LogLevel.Warning, "Options received from plugin are null, using default options");
-            }
-            else if (options.LogHeader)
+            if (options.LogHeader)
             {
                 Console.WriteLine(LogHeader);
-            }
-
-            // set log level
-            SharedDomain.SetLogLevel(options.LogLevel);
-
-            if (options.InternalOptions == null)
-            {
-                options.InternalOptions = new();
-                Debug.Log(LogLevel.Warning, "Internal options from plugin are null, using default internal options");
-            }
-
-            if (options.NetworkingOptions == null)
-            {
-                options.NetworkingOptions = new();
-                Debug.Log(LogLevel.Warning, "Networking options from plugin are null, using default networking options");
             }
 
             var dataBuilder = new DataBuilder();
@@ -116,10 +101,15 @@ namespace Zero.Game.Server
 
             // init globals
             SharedDomain.Setup(options.InternalOptions, dataBuilder.Build());
-            ServerDomain.Setup(deploymentProvider);
 
             var server = new ZeroServer(plugin, options);
             return server;
+        }
+
+        public static void Setup(ILoggingProvider loggingProvider, IDeploymentProvider deploymentProvider, ServerPlugin plugin)
+        {
+            SharedDomain.SetLogger(loggingProvider, plugin.Options.LogLevel);
+            ServerDomain.Setup(deploymentProvider);
         }
 
         public async Task<StartWorldResponse> AddWorldAsync(StartWorldRequest request)
@@ -155,6 +145,11 @@ namespace Zero.Game.Server
             if (!IPAddress.TryParse(request.ClientIp, out var ipAddress))
             {
                 return ConnectionFailReason.InvalidClientIpAddress;
+            }
+
+            if (_maxConnections >= 0 && _connections.Count >= _maxConnections)
+            {
+                return ConnectionFailReason.MaxConnectionsReached;
             }
 
             return _connectionListener.OpenConnection(ipAddress, request);
@@ -229,7 +224,8 @@ namespace Zero.Game.Server
 
         private bool CreateConnection(StartConnectionRequest request, ConnectionSocket socket)
         {
-            if (!_worlds.TryGet(request.WorldId, out _))
+            if (!_worlds.TryGet(request.WorldId, out _) ||
+                (_maxConnections >= 0 && _connections.Count >= _maxConnections))
             {
                 // TODO error
                 return false;
@@ -250,7 +246,6 @@ namespace Zero.Game.Server
             }
 
             var world = new World(worldId, data ?? new Dictionary<string, string>());
-            _worlds.Add(world);
             _loadTasks.Add(LoadWorldAsync(world, completion));
         }
 
@@ -263,7 +258,6 @@ namespace Zero.Game.Server
             }
 
             var world = new World(worldId, data ?? new Dictionary<string, string>());
-            _worlds.Add(world);
             await LoadWorldAsync(world, completion);
         }
 
@@ -278,7 +272,7 @@ namespace Zero.Game.Server
 
         private async Task LoadConnectionAsync(Connection connection, uint worldId)
         {
-            var success = false;
+            bool success;
             try
             {
                 success = await _plugin.LoadConnectionAsync(connection);
@@ -296,6 +290,10 @@ namespace Zero.Game.Server
             else if (!_worlds.TryGet(worldId, out var world))
             {
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
+            }
+            else if (world.HasMaxConnections)
+            {
+                connection.Disconnect(); // TODO add a re-route plugin method
             }
             else
             {
@@ -321,6 +319,13 @@ namespace Zero.Game.Server
                 response.State = WorldStartState.Failed;
                 response.FailReason = WorldFailReason.LoadThrewException;
             }
+
+            if (response.State == WorldStartState.Started)
+            {
+                world.ParallelLocked = true;
+                _worlds.Add(world);
+            }
+
             completion?.TrySetResult(response);
         }
 
@@ -344,7 +349,15 @@ namespace Zero.Game.Server
 
         private void ReceiveData()
         {
-            Parallel.ForEach(_connections, ReceiveData);
+            Entities.AllowStructuralChange = false;
+            try
+            {
+                Parallel.ForEach(_connections, ReceiveData);
+            }
+            finally
+            {
+                Entities.AllowStructuralChange = true;
+            }
         }
 
         private unsafe void ReceiveData(Connection connection)
@@ -446,7 +459,7 @@ namespace Zero.Game.Server
 
         private void RemoveAllWorlds()
         {
-            var worlds = _worlds.GetWorldsList().ToArray();
+            var worlds = _worlds.GetAllWorlds();
             foreach (var world in worlds)
             {
                 RemoveWorld(world.Id);
@@ -458,19 +471,22 @@ namespace Zero.Game.Server
             for (int i = 0; i < _connections.Count; i++)
             {
                 var connection = _connections[i];
+                connection.UpdateTimeout(_clientTimeout);
+
                 if (!connection.Loaded ||
                     connection.Connected)
                 {
                     continue;
                 }
 
-                _connections.RemoveAt(i);
+                _connections.PatchRemoveAt(i);
                 i--;
 
                 connection.Clear();
                 if (connection.World != null)
                 {
-                    connection.World.Connections.Remove(connection);
+                    connection.World.Connections.PatchRemove(connection);
+                    connection.World.Report();
                     connection.RemoveFromWorld(_plugin);
                 }
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
@@ -523,7 +539,15 @@ namespace Zero.Game.Server
 
         private void SendData()
         {
-            Parallel.ForEach(_connections, SendData);
+            Entities.AllowStructuralChange = false;
+            try
+            {
+                Parallel.ForEach(_connections, SendData);
+            }
+            finally
+            {
+                Entities.AllowStructuralChange = true;
+            }
         }
 
         private unsafe void SendData(Connection connection)
@@ -636,7 +660,8 @@ namespace Zero.Game.Server
                     connection.View.PostSend();
 
                     if (entityCount == 0 &&
-                        removedCount == 0)
+                        removedCount == 0 &&
+                        (DateTime.UtcNow - connection.Socket.LastSendUtc).TotalMilliseconds < _clientTimeout.Milliseconds / 5) // send blank data every 1/5 of timeout to keep connection alive
                     {
                         return; // no data to send
                     }
@@ -766,8 +791,16 @@ namespace Zero.Game.Server
                 connectionsToQuery++;
             }
 
-            Parallel.For(0, (int)connectionsToQuery, UpdateView);
-            _connectionViewOffset = (_connectionViewOffset + 1) % _connectionStepSize;
+            Entities.AllowStructuralChange = false;
+            try
+            {
+                Parallel.For(0, (int)connectionsToQuery, UpdateView);
+            }
+            finally
+            {
+                Entities.AllowStructuralChange = true;
+                _connectionViewOffset = (_connectionViewOffset + 1) % _connectionStepSize;
+            }
         }
 
         private void UpdateView(int parallelIndex)
@@ -783,6 +816,12 @@ namespace Zero.Game.Server
             for (int i = 0; i < worlds.Count; i++)
             {
                 worlds[i].Update();
+            }
+
+            var parallelWorlds = _worlds.GetParallelWorldsList();
+            if (parallelWorlds.Count != 0)
+            {
+                Parallel.ForEach(parallelWorlds, x => x.Update());
             }
         }
 

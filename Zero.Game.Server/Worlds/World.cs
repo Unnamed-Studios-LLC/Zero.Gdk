@@ -7,6 +7,7 @@ namespace Zero.Game.Server
     {
         private readonly List<ComponentSystem> _componentSystems = new();
         private readonly List<ComponentSystem> _componentSystemsAlt = new();
+        private bool _parallel;
 
         public World(uint id, Dictionary<string, string> data)
         {
@@ -41,11 +42,36 @@ namespace Zero.Game.Server
         public uint Id { get; }
 
         /// <summary>
+        /// Sets a max connection count for this world (-1, no max by default)
+        /// </summary>
+        public int MaxConnections { get; set; } = -1;
+
+        /// <summary>
+        /// If this world should update in parallel.
+        /// </summary>
+        public bool Parallel
+        {
+            get => _parallel;
+            set
+            {
+                if (ParallelLocked)
+                {
+                    throw new Exception($"{nameof(Parallel)} cannot be altered after world load");
+                }
+                _parallel = value;
+                Entities.RunningInParallel = value;
+            }
+        }
+
+        /// <summary>
         /// A user-assignable state object
         /// </summary>
         public object State { get; set; }
 
         internal List<Connection> Connections { get; } = new List<Connection>();
+        internal bool ConnectionsChanged { get; set; }
+        internal bool HasMaxConnections => MaxConnections >= 0 && Connections.Count >= MaxConnections;
+        internal bool ParallelLocked { get; set; }
 
         /// <summary>
         /// Adds a given component system to the world. Component systems cannot be added to multiple worlds
@@ -100,6 +126,11 @@ namespace Zero.Game.Server
         internal void Dispose()
         {
             Entities.Dispose();
+        }
+
+        internal void Report()
+        {
+            ServerDomain.DeploymentProvider.ReportConnectionCount(Id, Connections.Count);
         }
 
         internal void Update()
