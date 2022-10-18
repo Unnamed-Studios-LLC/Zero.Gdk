@@ -43,7 +43,16 @@ namespace Zero.Game.Local.Services.Hosted
                 return;
             }
 
-            ZeroLocal.Server = ZeroServer.Create(_loggingProvider, _deploymentProvider, _serverPlugin);
+            try
+            {
+                ZeroLocal.Server = ZeroServer.Create(_loggingProvider, _deploymentProvider, _serverPlugin);
+            }
+            catch (Exception e)
+            {
+                _loggingProvider.Log(Shared.LogLevel.Critical, "An error occurred during setup", e);
+                _lifetime.StopApplication();
+                return;
+            }
 
             Debug.LogInfo("Starting server...");
             Debug.LogInfo("Press Ctrl+C to stop");

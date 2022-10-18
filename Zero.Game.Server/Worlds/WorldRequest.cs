@@ -26,7 +26,7 @@ namespace Zero.Game.Server
 
         public static WorldRequest CreateRemove(uint worldId)
         {
-            return new WorldRequest(true, worldId, null, null);
+            return new WorldRequest(true, worldId, null, new TaskCompletionSource<StartWorldResponse>());
         }
     }
 }

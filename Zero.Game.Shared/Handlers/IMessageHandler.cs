@@ -6,6 +6,6 @@
         void HandleWorld(uint worldId);
         void PostHandle();
         void PreHandle(uint time);
-        void RemoveEntity(uint entityId);
+        void HandleRemove(uint entityId);
     }
 }

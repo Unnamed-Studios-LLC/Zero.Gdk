@@ -14,12 +14,20 @@ namespace Zero.Game.Shared
         [FieldOffset(12)]
         public float Height;
 
-        public Rect(float x, float y, float width, float height) : this()
+        public Rect(float x, float y, float width, float height)
         {
             X = x;
             Y = y;
             Width = width;
             Height = height;
+        }
+
+        public Rect(Vec2 point, Vec2 size)
+        {
+            X = point.X;
+            Y = point.Y;
+            Width = size.X;
+            Height = size.Y;
         }
 
         public Vec2 Bl => new Vec2(X, Y);
@@ -84,6 +92,11 @@ namespace Zero.Game.Shared
         public bool Intersects(Rect other)
         {
             return Bottom < other.Top && Top > other.Bottom && Left < other.Right && Right > other.Left;
+        }
+
+        public override string ToString()
+        {
+            return $"({X}, {Y}, {Width}, {Height})";
         }
     }
 }

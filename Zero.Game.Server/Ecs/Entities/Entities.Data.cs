@@ -53,8 +53,23 @@ namespace Zero.Game.Server
                 ThrowHelper.ThrowInvalidEntityId();
             }
 
-            entityData.PushPersistent(&data);
-            entityData.PushEvent(Time.Total, &data);
+            entityData.PushPersistent(Time.Total, &data);
+        }
+        /// <summary>
+        /// Trys to get the persistent data set for a given entity. If no data has been set, false is returned
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entityId"></param>
+        /// <returns></returns>
+        public bool TryGetPersistent<T>(uint entityId, out T data) where T : unmanaged
+        {
+            ThrowHelper.ThrowIfDataNotDefined<T>();
+            if (!_entityData.TryGetValue(entityId, out var entityData))
+            {
+                ThrowHelper.ThrowInvalidEntityId();
+            }
+
+            return entityData.TryGetPersistent(out data);
         }
     }
 }

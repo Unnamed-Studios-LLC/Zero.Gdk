@@ -65,8 +65,8 @@ namespace Zero.Game.Local
                 })
                 .ConfigureLogging(logging =>
                 {
-                    //logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
                     logging.ClearProviders();
+                    logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
                     logging.AddConsole(options => options.FormatterName = nameof(ZeroConsoleFormatter))
                         .AddConsoleFormatter<ZeroConsoleFormatter, ConsoleFormatterOptions>();
                 });

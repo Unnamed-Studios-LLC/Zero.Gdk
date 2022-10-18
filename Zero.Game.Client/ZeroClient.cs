@@ -42,7 +42,7 @@ namespace Zero.Game.Client
             _sendBufferSize = options.NetworkingOptions.ClientBufferSize;
             _writeBuffer = new byte[_sendBufferSize];
             _receiveBufferSize = options.NetworkingOptions.ServerBufferSize;
-            _receiveMaxQueueSize = options.NetworkingOptions.ClientMaxReceiveQueueSize;
+            _receiveMaxQueueSize = options.NetworkingOptions.MaxReceiveQueueSize;
             _dataToSend = new EntityData(100, _bufferCache);
         }
 
@@ -109,7 +109,20 @@ namespace Zero.Game.Client
             }
 
             ReceiveData(time);
+            UpdatePlugin();
             SendData(time);
+        }
+
+        private void UpdatePlugin()
+        {
+            try
+            {
+                _plugin.Update();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e, "An error occurred during: {0}", nameof(_plugin.Update));
+            }
         }
 
         private void ForciblyDisconnect(string reason)
@@ -133,6 +146,7 @@ namespace Zero.Game.Client
             EntityMessage entityMessage = default;
             byte dataType = 0;
             int i = 0;
+            ushort scalarCount = 0;
             try
             {
                 for (i = 0; i < _receiveList.Count; i++)
@@ -160,7 +174,7 @@ namespace Zero.Game.Client
                                 ForciblyDisconnect("A fault occurred while reading client received data");
                                 return;
                             }
-                            handler.RemoveEntity(removedEntityId);
+                            handler.HandleRemove(removedEntityId);
                         }
 
                         while (reader.BytesRead < reader.Capacity)
@@ -175,8 +189,31 @@ namespace Zero.Game.Client
 
                             for (uint d = 0; d < entityMessage.DataCount; d++)
                             {
-                                if (!reader.Read(&dataType) ||
-                                    !handler.HandleData(dataType, ref reader)) // handle data
+                                if (!reader.Read(&dataType)) // handle data
+                                {
+                                    ForciblyDisconnect("Received data faulted during read");
+                                    return;
+                                }
+
+                                if (dataType == byte.MaxValue)
+                                {
+                                    if (!reader.Read(&scalarCount) ||
+                                        !reader.Read(&dataType))
+                                    {
+                                        ForciblyDisconnect("Received data faulted during read");
+                                        return;
+                                    }
+
+                                    for (int j = 0; j < scalarCount; j++) // read/handle scalar datas
+                                    {
+                                        if (!handler.HandleData(dataType, ref reader))
+                                        {
+                                            ForciblyDisconnect("Received data faulted during read");
+                                            return;
+                                        }
+                                    }
+                                }
+                                else if (!handler.HandleData(dataType, ref reader)) // handle single data
                                 {
                                     ForciblyDisconnect("Received data faulted during read");
                                     return;
@@ -210,7 +247,7 @@ namespace Zero.Game.Client
         {
             try
             {
-                if ((!_sendRequired && !_dataToSend.HasEventData(_eventTime)) || 
+                if ((!_sendRequired && !_dataToSend.HasOneOffData(_eventTime)) || 
                     _lastReceivedBatchKey == 0)
                 {
                     return;
@@ -228,12 +265,9 @@ namespace Zero.Game.Client
                         return;
                     }
 
-                    if (_dataToSend.HasEventData(_eventTime))
+                    if (_dataToSend.HasOneOffData(_eventTime))
                     {
-                        var dataBuffer = _dataToSend.EventData;
-                        var dataByteLength = _dataToSend.EventDataByteLength;
-                        var dataCount = _dataToSend.EventDataCount;
-
+                        var dataCount = _dataToSend.EventData.Count;
                         if (dataCount > ushort.MaxValue)
                         {
                             ForciblyDisconnect("Entity encountered with more than 65535 data values");
@@ -247,13 +281,10 @@ namespace Zero.Game.Client
                             return;
                         }
 
-                        fixed (byte* dataBufferPtr = dataBuffer)
+                        if (!_dataToSend.EventData.Write(ref writer))
                         {
-                            if (!writer.Write(dataBufferPtr, dataByteLength))
-                            {
-                                ForciblyDisconnect("Sent data exceeded the max send buffer");
-                                return;
-                            }
+                            ForciblyDisconnect("Sent data exceeded the max send buffer");
+                            return;
                         }
                     }
                     else

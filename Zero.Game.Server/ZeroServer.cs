@@ -51,6 +51,8 @@ namespace Zero.Game.Server
         private uint _connectionViewOffset;
         private bool _stopped = false;
         private bool _running = false;
+        private Time.MethodDurations _methodDurations;
+        private long _lastDurationTimestamp;
 
         internal ZeroServer(ServerPlugin plugin, ServerOptions options)
         {
@@ -61,9 +63,10 @@ namespace Zero.Game.Server
             _connectionListener = new ConnectionListener<StartConnectionRequest>(options.Port);
             _sendBufferSize = options.NetworkingOptions.ServerBufferSize;
             _receiveBufferSize = options.NetworkingOptions.ClientBufferSize;
-            _receiveMaxQueueSize = options.NetworkingOptions.ServerMaxReceiveQueueSize;
+            _receiveMaxQueueSize = options.NetworkingOptions.MaxReceiveQueueSize;
             _clientTimeout = TimeSpan.FromMilliseconds(options.NetworkingOptions.ReceiveTimeoutMs);
             _maxConnections = options.MaxConnections;
+            Time.TargetDelta = options.UpdateIntervalMs;
         }
 
         public static ZeroServer Create(ILoggingProvider loggingProvider, IDeploymentProvider deploymentProvider, ServerPlugin plugin)
@@ -186,6 +189,7 @@ namespace Zero.Game.Server
                 SetTimeVariables();
                 Update();
                 _ticker.WaitNext();
+                _methodDurations.WaitNext = AdvanceDurationTimestamp();
             }
 
             _running = false;
@@ -206,7 +210,7 @@ namespace Zero.Game.Server
                 ref var request = ref span[i];
                 if (request.Remove)
                 {
-                    RemoveWorld(request.WorldId);
+                    RemoveWorld(request.WorldId, request.Completed);
                 }
                 else
                 {
@@ -220,6 +224,15 @@ namespace Zero.Game.Server
         {
             RemoveConnections();
             ReceiveConnections();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private long AdvanceDurationTimestamp()
+        {
+            var newTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+            var delta = newTimestamp - _lastDurationTimestamp;
+            _lastDurationTimestamp = newTimestamp;
+            return delta;
         }
 
         private bool CreateConnection(StartConnectionRequest request, ConnectionSocket socket)
@@ -362,7 +375,8 @@ namespace Zero.Game.Server
 
         private unsafe void ReceiveData(Connection connection)
         {
-            if (!connection.Connected)
+            if (!connection.Connected ||
+                !connection.Loaded)
             {
                 return;
             }
@@ -376,6 +390,7 @@ namespace Zero.Game.Server
             ClientBatchMessage* batchMessage = null;
             EntityMessage* entityMessage = null;
             byte* dataType = null;
+            ushort* scalarCount = null;
             try
             {
                 for (i = 0; i < span.Length; i++)
@@ -412,11 +427,33 @@ namespace Zero.Game.Server
                         }
 
                         // server does not handle entity
-
                         for (uint d = 0; d < entityMessage->DataCount; d++)
                         {
-                            if (!reader.Read(&dataType) ||
-                                !handler.HandleRawData(*dataType, ref reader)) // handle data
+                            if (!reader.Read(&dataType))
+                            {
+                                connection.ForciblyRemove("Received data faulted during read: data type");
+                                return;
+                            }
+
+                            if (*dataType == byte.MaxValue) // is scalar, read size and type
+                            {
+                                if (!reader.Read(&scalarCount) ||
+                                    !reader.Read(&dataType))
+                                {
+                                    connection.ForciblyRemove("Received data faulted during read: scalar size/type");
+                                    return;
+                                }
+
+                                for (int j = 0; j < *scalarCount; j++)
+                                {
+                                    if (!handler.HandleRawData(*dataType, ref reader)) // handle scalar data
+                                    {
+                                        connection.ForciblyRemove("Received data faulted during read: scalar data");
+                                        return;
+                                    }
+                                }
+                            }
+                            else if (!handler.HandleRawData(*dataType, ref reader)) // handle data
                             {
                                 connection.ForciblyRemove("Received data faulted during read: data");
                                 return;
@@ -450,7 +487,8 @@ namespace Zero.Game.Server
             foreach (var connection in _connections)
             {
                 connection.Disconnect();
-                connection.World.Connections.Clear();
+                connection.World.ClearConnections();
+                connection.World = null;
                 connection.Clear();
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
             }
@@ -462,7 +500,7 @@ namespace Zero.Game.Server
             var worlds = _worlds.GetAllWorlds();
             foreach (var world in worlds)
             {
-                RemoveWorld(world.Id);
+                RemoveWorld(world.Id, null);
             }
         }
 
@@ -482,37 +520,34 @@ namespace Zero.Game.Server
                 _connections.PatchRemoveAt(i);
                 i--;
 
-                connection.Clear();
                 if (connection.World != null)
                 {
-                    connection.World.Connections.PatchRemove(connection);
-                    connection.World.Report();
-                    connection.RemoveFromWorld(_plugin);
+                    connection.RemoveFromWorld(_plugin, false);
                 }
+                connection.Clear();
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
             }
         }
 
-        private void RemoveWorld(uint worldId)
+        private void RemoveWorld(uint worldId, TaskCompletionSource<StartWorldResponse> completed)
         {
             if (!_worlds.TryRemove(worldId, out var world))
             {
+                completed?.TrySetResult(null);
                 return;
             }
 
             // remove world connections
-            var connectionSpan = CollectionsMarshal.AsSpan(world.Connections);
-            for (int i = 0; i < connectionSpan.Length; i++)
+            for (int i = 0; i < world.Connections.Count; i++)
             {
-                ref var connection = ref connectionSpan[i];
+                var connection = world.Connections[i];
                 connection.Disconnect();
+                connection.RemoveFromWorld(_plugin, true);
                 connection.Clear();
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
             }
-            world.Connections.Clear();
-            _unloadTasks.Add(UnloadWorldAsync(world));
-
-            return;
+            world.ClearConnections();
+            _unloadTasks.Add(UnloadWorldAsync(world, completed));
         }
 
         private async Task RemoveWorldNowAsync(uint worldId)
@@ -527,12 +562,12 @@ namespace Zero.Game.Server
             {
                 var connection = world.Connections[i];
                 connection.Disconnect();
-                connection.RemoveFromWorld(_plugin);
+                connection.RemoveFromWorld(_plugin, true);
                 connection.Clear();
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
             }
-            world.Connections.Clear();
-            await UnloadWorldAsync(world);
+            world.ClearConnections();
+            await UnloadWorldAsync(world, null);
 
             return;
         }
@@ -552,7 +587,8 @@ namespace Zero.Game.Server
 
         private unsafe void SendData(Connection connection)
         {
-            if (!connection.Connected)
+            if (!connection.Connected ||
+                !connection.Loaded)
             {
                 return;
             }
@@ -612,27 +648,13 @@ namespace Zero.Game.Server
                             continue;
                         }
 
-                        if (!isNew && !data.HasEventData(time))
+                        if (!isNew && !data.HasOneOffData(time))
                         {
                             continue;
                         }
 
                         entityCount++;
-
-                        byte[] dataBuffer;
-                        int dataByteLength, dataCount;
-                        if (isNew)
-                        {
-                            dataBuffer = data.PersistentData;
-                            dataByteLength = data.PersistentDataByteLength;
-                            dataCount = data.PersistentDataCount;
-                        }
-                        else
-                        {
-                            dataBuffer = data.EventData;
-                            dataByteLength = data.EventDataByteLength;
-                            dataCount = data.EventDataCount;
-                        }
+                        int dataCount = (isNew ? data.PersistentData.Count : data.PersistentUpdatedData.Count) + (data.HasEventData(time) ? data.EventData.Count : 0);
 
                         if (dataCount > ushort.MaxValue)
                         {
@@ -647,13 +669,17 @@ namespace Zero.Game.Server
                             return;
                         }
 
-                        fixed (byte* dataBufferPtr = dataBuffer)
+                        if ((isNew && !data.PersistentData.Write(ref writer)) ||
+                            (!isNew && !data.PersistentUpdatedData.Write(ref writer)))
                         {
-                            if (!writer.Write(dataBufferPtr, dataByteLength))
-                            {
-                                connection.ForciblyRemove("Sent data exceeded the max send buffer");
-                                return;
-                            }
+                            connection.ForciblyRemove("Sent data exceeded the max send buffer");
+                            return;
+                        }
+
+                        if (data.HasEventData(time) && !data.EventData.Write(ref writer))
+                        {
+                            connection.ForciblyRemove("Sent data exceeded the max send buffer");
+                            return;
                         }
                     }
 
@@ -695,8 +721,10 @@ namespace Zero.Game.Server
 
         private void SetTimeVariables()
         {
+            _methodDurations.Normalize(_ticker.LastUpdateDuration);
             Time.Delta = _ticker.Delta;
             Time.LastUpdateDuration = _ticker.LastUpdateDuration;
+            Time.LastUpdateMethods = _methodDurations;
             Time.Total = _ticker.Total;
         }
 
@@ -706,6 +734,7 @@ namespace Zero.Game.Server
             GameSynchronizationContext.InitializeOnCurrentThread();
             _connectionListener.Start();
             _ticker.Start();
+            _lastDurationTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         }
 
         private void Stop()
@@ -732,7 +761,7 @@ namespace Zero.Game.Server
             connection.State = null;
         }
 
-        private async Task UnloadWorldAsync(World world)
+        private async Task UnloadWorldAsync(World world, TaskCompletionSource<StartWorldResponse> completed)
         {
             try
             {
@@ -744,18 +773,34 @@ namespace Zero.Game.Server
             }
             world.State = null;
             world.Dispose();
+            completed?.TrySetResult(null);
         }
 
         private void Update()
         {
             GameSynchronizationContext.Run();
+            _methodDurations.SynchronizationContext = AdvanceDurationTimestamp();
+
             AddRemoveWorlds();
+            _methodDurations.AddRemoveWorlds = AdvanceDurationTimestamp();
+
             AddRemoveConnections();
+            _methodDurations.AddRemoveConnections = AdvanceDurationTimestamp();
+
             UpdateTasks();
+            _methodDurations.UpdateTasks = AdvanceDurationTimestamp();
+
             ReceiveData();
+            _methodDurations.ReceiveData = AdvanceDurationTimestamp();
+
             UpdateWorlds();
+            _methodDurations.UpdateWorlds = AdvanceDurationTimestamp();
+
             UpdateViews();
+            _methodDurations.UpdateViews = AdvanceDurationTimestamp();
+
             SendData();
+            _methodDurations.SendData = AdvanceDurationTimestamp();
         }
 
         private void UpdateTasks()
@@ -807,6 +852,10 @@ namespace Zero.Game.Server
         {
             using var scope = GameSynchronizationContext.CreateScope();
             var connection = _connections[(int)(parallelIndex * _connectionStepSize + _connectionViewOffset)];
+            if (!connection.Loaded)
+            {
+                return;
+            }
             connection.ViewQuery();
         }
 

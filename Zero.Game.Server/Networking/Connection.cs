@@ -91,8 +91,7 @@ namespace Zero.Game.Server
         {
             World = world;
             EntityId = world.Entities.CreateEntity();
-            World.Connections.Add(this);
-            World.Report();
+            world.AddConnection(this);
             Query?.NewWorld();
 
             try
@@ -170,7 +169,7 @@ namespace Zero.Game.Server
                                 ForciblyRemove("A fault occurred while reading client received data");
                                 return false;
                             }
-                            handler.RemoveEntity(*removedEntityId);
+                            handler.HandleRemove(*removedEntityId);
                         }
 
                         while (reader.BytesRead < reader.Capacity)
@@ -217,7 +216,7 @@ namespace Zero.Game.Server
             return true;
         }
 
-        internal void RemoveFromWorld(ServerPlugin plugin)
+        internal void RemoveFromWorld(ServerPlugin plugin, bool stopping)
         {
             try
             {
@@ -229,6 +228,10 @@ namespace Zero.Game.Server
             }
 
             World.Entities.DestroyEntity(EntityId);
+            if (!stopping)
+            {
+                World.RemoveConnection(this);
+            }
             EntityId = 0;
             World = null;
         }

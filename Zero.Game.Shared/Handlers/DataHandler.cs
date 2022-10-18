@@ -17,7 +17,8 @@ namespace Zero.Game.Shared
         public override bool HandleData(ref BlitReader reader)
         {
             T data = default;
-            if (!reader.Read(&data))
+            if (!Data<T>.ZeroSize &&
+                !reader.Read(&data))
             {
                 return false;
             }
@@ -36,7 +37,8 @@ namespace Zero.Game.Shared
         public override bool HandleRawData(ref RawBlitReader reader)
         {
             T* data = default;
-            if (!reader.Read(&data))
+            if (!Data<T>.ZeroSize &&
+                !reader.Read(&data))
             {
                 return false;
             }

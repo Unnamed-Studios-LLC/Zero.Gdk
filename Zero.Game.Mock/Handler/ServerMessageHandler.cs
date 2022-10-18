@@ -24,7 +24,7 @@ namespace Zero.Game.Mock
 
         }
 
-        public void RemoveEntity(uint entityId)
+        public void HandleRemove(uint entityId)
         {
 
         }

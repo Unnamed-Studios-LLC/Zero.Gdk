@@ -63,6 +63,11 @@ namespace Zero.Game.Server
             Commands.Execute();
         }
 
+        protected void AddSystem<T>(T system) where T : ComponentSystem => World.AddSystem(system);
+        protected T GetSystem<T>() where T : ComponentSystem => World.GetSystem<T>();
+        protected bool RemoveSystem<T>() where T : ComponentSystem => World.RemoveSystem<T>();
+        protected bool RemoveSystem<T>(T system) where T : ComponentSystem => World.RemoveSystem(system);
+
         protected virtual void OnStart() { }
         protected virtual void OnUpdate() { }
     }

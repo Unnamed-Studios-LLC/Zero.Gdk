@@ -7,6 +7,8 @@ namespace Zero.Game.Server
     {
         private readonly List<ComponentSystem> _componentSystems = new();
         private readonly List<ComponentSystem> _componentSystemsAlt = new();
+        private readonly List<Connection> _connectionList = new();
+        private readonly Dictionary<uint, Connection> _connectionEntityMap = new();
         private bool _parallel;
 
         public World(uint id, Dictionary<string, string> data)
@@ -68,7 +70,7 @@ namespace Zero.Game.Server
         /// </summary>
         public object State { get; set; }
 
-        internal List<Connection> Connections { get; } = new List<Connection>();
+        internal IReadOnlyList<Connection> Connections => _connectionList;
         internal bool ConnectionsChanged { get; set; }
         internal bool HasMaxConnections => MaxConnections >= 0 && Connections.Count >= MaxConnections;
         internal bool ParallelLocked { get; set; }
@@ -91,6 +93,13 @@ namespace Zero.Game.Server
         }
 
         /// <summary>
+        /// Gets a connection from its entity id, returns null if no connection is found
+        /// </summary>
+        /// <param name="entityId"></param>
+        /// <returns></returns>
+        public Connection GetConnection(uint entityId) => _connectionEntityMap.TryGetValue(entityId, out var connection) ? connection : null;
+
+        /// <summary>
         /// Returns a component system matching the given type. Null is returned if no matching system is found
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -108,19 +117,51 @@ namespace Zero.Game.Server
         }
 
         /// <summary>
+        /// Removes the first component system of given type if it exists within the world
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="componentSystem"></param>
+        public bool RemoveSystem<T>() where T : ComponentSystem
+        {
+            for (int i = 0; i < _componentSystems.Count; i++)
+            {
+                if (_componentSystems[i] is T typeSystem)
+                {
+                    return RemoveSystem(typeSystem);
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Removes a given component system if it exists within the world
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="componentSystem"></param>
-        public void RemoveSystem<T>(T componentSystem) where T : ComponentSystem
+        public bool RemoveSystem<T>(T componentSystem) where T : ComponentSystem
         {
             if (!_componentSystems.Remove(componentSystem))
             {
-                return; // return if the given component system wasn't found (already removed or give an invalid system)
+                return false; // return if the given component system wasn't found (already removed or give an invalid system)
             }
 
             componentSystem.RemoveFromWorld();
             Entities.UnsubscribeSystem(componentSystem);
+            return true;
+        }
+
+        internal void AddConnection(Connection connection)
+        {
+            _connectionList.Add(connection);
+            _connectionEntityMap.Add(connection.EntityId, connection);
+            ReportConnectionCount();
+        }
+
+        internal void ClearConnections()
+        {
+            _connectionList.Clear();
+            _connectionEntityMap.Clear();
+            ReportConnectionCount();
         }
 
         internal void Dispose()
@@ -128,9 +169,11 @@ namespace Zero.Game.Server
             Entities.Dispose();
         }
 
-        internal void Report()
+        internal void RemoveConnection(Connection connection)
         {
-            ServerDomain.DeploymentProvider.ReportConnectionCount(Id, Connections.Count);
+            _connectionList.PatchRemove(connection);
+            _connectionEntityMap.Remove(connection.EntityId);
+            ReportConnectionCount();
         }
 
         internal void Update()
@@ -147,6 +190,11 @@ namespace Zero.Game.Server
                 system.Update();
             }
             _componentSystemsAlt.Clear();
+        }
+
+        private void ReportConnectionCount()
+        {
+            ServerDomain.DeploymentProvider.ReportConnectionCount(Id, Connections.Count);
         }
     }
 }

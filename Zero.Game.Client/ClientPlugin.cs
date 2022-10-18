@@ -29,5 +29,10 @@ namespace Zero.Game.Client
         /// disconnected from server
         /// </summary>
         public virtual void Disconnected() { }
+
+        /// <summary>
+        /// update function called after receive and before send
+        /// </summary>
+        public virtual void Update() { }
     }
 }

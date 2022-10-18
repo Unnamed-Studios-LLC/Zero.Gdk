@@ -50,6 +50,18 @@ namespace Zero.Game.Shared
             }
         }
 
+        public void HandleRemove(uint entityId)
+        {
+            try
+            {
+                Implementation?.HandleRemove(entityId);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e, "An error occurred during {0}", nameof(HandleRemove));
+            }
+        }
+
         public void HandleWorld(uint worldId)
         {
             try
@@ -83,18 +95,6 @@ namespace Zero.Game.Shared
             catch (Exception e)
             {
                 Debug.LogError(e, "An error occurred during {0}", nameof(PostHandle));
-            }
-        }
-
-        public void RemoveEntity(uint entityId)
-        {
-            try
-            {
-                Implementation?.RemoveEntity(entityId);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError(e, "An error occurred during {0}", nameof(RemoveEntity));
             }
         }
 

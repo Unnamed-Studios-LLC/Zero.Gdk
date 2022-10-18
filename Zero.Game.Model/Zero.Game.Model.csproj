@@ -20,6 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ZeroServices.Core.Model" Version="1.0.122" />
+    <PackageReference Include="ZeroServices.Core.Model" Version="1.0.125" />
   </ItemGroup>
 </Project>

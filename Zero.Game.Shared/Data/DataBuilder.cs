@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace Zero.Game.Shared
 {
@@ -15,12 +16,22 @@ namespace Zero.Game.Shared
             var type = typeof(T);
             if (!_types.Add(type))
             {
-                throw new Exception($"Data type {type.FullName} has already been defined");
+                throw new Exception($"Data {type.FullName} has already been defined");
             }
 
             if (_definitions.Count >= Capacity)
             {
                 throw new Exception($"Max data types reached. Only {Capacity} data types may be defined");
+            }
+
+            if (type.StructLayoutAttribute == null)
+            {
+                throw new Exception($"Data {type.FullName} missing StructLayout attribute");
+            }
+
+            if (type.StructLayoutAttribute.Value != LayoutKind.Explicit)
+            {
+                throw new Exception($"Data {type.FullName} LayoutKind of StructLayout attribute must be set to Explicit");
             }
 
             Data<T>.Generate();

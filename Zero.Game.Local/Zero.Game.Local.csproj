@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <PackageId>ZeroServices.Game.Local</PackageId>
     <Product>Zero Game Services</Product>
     <Company>Unnamed Studios, LLC</Company>
@@ -30,8 +30,8 @@
     <Folder Include="Services\Hosted\" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="5.6.3" />
-    <PackageReference Include="UnnamedStudios.Common.Model" Version="1.3.16" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
+    <PackageReference Include="UnnamedStudios.Common.Model" Version="1.3.18" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Zero.Game.Server\Zero.Game.Server.csproj" />
