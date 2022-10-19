@@ -291,7 +291,7 @@ namespace Zero.Game.Server
 
         /// <summary>
         /// Returns a reference to component T found on the given entity id. This method will throw if the entity or component doesn't exist.
-        /// Consider using TryGetComponent you are unsure about the entity or component's existence
+        /// Consider using TryGetComponent you are unsure about the component's existence
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="entityId"></param>
@@ -315,6 +315,29 @@ namespace Zero.Game.Server
             }
 
             return ref reference.GetComponent<T>(type);
+        }
+
+        /// <summary>
+        /// Returns a reference struct to an entities components.
+        /// Used for multiple component gets and checks.
+        /// This method will throw if the entity doesn't exist.
+        /// The returned Components are invalid after any structural change
+        /// </summary>
+        /// <param name="entityId"></param>
+        /// <returns></returns>
+        public unsafe Components GetComponents(uint entityId)
+        {
+            if (!_entityLocationMap.TryGetValue(entityId, out var reference)) // no entity found
+            {
+                ThrowHelper.ThrowInvalidEntityId();
+            }
+
+            if (reference.Group == null)
+            {
+                return new Components(reference.Group, null, -1);
+            }
+
+            return new Components(reference.Group, reference.Group.GetChunk(reference.ChunkIndex), reference.ListIndex);
         }
 
         /// <summary>
@@ -455,7 +478,8 @@ namespace Zero.Game.Server
         }
 
         /// <summary>
-        /// Returns a reference to component T found on the given entity id. Found is assigned to if the component and entity were found.
+        /// Returns a reference to component T found on the given entity id. Found is assigned to if the component is found on the entity.
+        /// A valid entityId is still required.
         /// If found is false, the returned ref is a throwaway ref.
         /// </summary>
         /// <typeparam name="T"></typeparam>

@@ -130,7 +130,24 @@ namespace Zero.Game.Server
             {
                 return ref TypeCache<T>.NullRef;
             }
-            return ref Unsafe.AsRef<T>(list + listIndex);
+            return ref *(list + listIndex);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T GetComponentRef<T>(byte* chunk, int componentListIndex, int listIndex) where T : unmanaged
+        {
+            var list = GetList<T>(chunk, componentListIndex);
+            if (list == null)
+            {
+                return ref TypeCache<T>.NullRef;
+            }
+            return ref *(list + listIndex);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public byte* GetChunk(int chunkIndex)
+        {
+            return (byte*)Chunks[chunkIndex].ToPointer();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -148,11 +165,17 @@ namespace Zero.Game.Server
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T* GetList<T>(int chunkIndex, int componentListIndex) where T : unmanaged
         {
+            return GetList<T>((byte*)Chunks[chunkIndex].ToPointer(), componentListIndex);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T* GetList<T>(byte* chunk, int componentListIndex) where T : unmanaged
+        {
             if (componentListIndex == -1)
             {
                 return null;
             }
-            return (T*)((byte*)Chunks[chunkIndex].ToPointer() + ComponentListOffsets[componentListIndex]);
+            return (T*)(chunk + ComponentListOffsets[componentListIndex]);
         }
 
         /// <summary>
