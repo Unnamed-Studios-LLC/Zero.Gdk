@@ -213,6 +213,7 @@ namespace Zero.Game.Server
 
                 Parallel.ForEach(_parallelChunkList, (pair) =>
                 {
+                    using var scope = GameSynchronizationContext.CreateScope();
                     var (group, indicesPtr, chunkIndex) = pair;
                     var indices = (int*)indicesPtr.ToPointer();
                     query.Func(group, chunkIndex, indices);

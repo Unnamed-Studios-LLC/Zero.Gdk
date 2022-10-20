@@ -874,7 +874,11 @@ namespace Zero.Game.Server
             var parallelWorlds = _worlds.GetParallelWorldsList();
             if (parallelWorlds.Count != 0)
             {
-                Parallel.ForEach(parallelWorlds, x => x.Update());
+                Parallel.ForEach(parallelWorlds, x =>
+                {
+                    using var scope = GameSynchronizationContext.CreateScope();
+                    x.Update();
+                });
             }
         }
 

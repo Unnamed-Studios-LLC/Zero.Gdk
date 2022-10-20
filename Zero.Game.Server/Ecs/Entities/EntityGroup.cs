@@ -71,13 +71,14 @@ namespace Zero.Game.Server
         {
             int chunkIndex = -1;
             EntityChunkHeader* chunk = null;
-            for (int i = 0; i < Chunks.Count; i++)
+
+            // check last chunk
+            if (Chunks.Count > 0)
             {
-                chunk = (EntityChunkHeader*)Chunks[i].ToPointer();
+                chunk = (EntityChunkHeader*)Chunks[^1].ToPointer();
                 if (chunk->Count < ChunkCapacity)
                 {
-                    chunkIndex = i;
-                    break;
+                    chunkIndex = Chunks.Count - 1;
                 }
             }
 
@@ -199,12 +200,10 @@ namespace Zero.Game.Server
             var lastChunkIndex = Chunks.Count - 1;
             var lastChunk = (byte*)Chunks[lastChunkIndex].ToPointer();
             var lastIndex = --((EntityChunkHeader*)lastChunk)->Count;
-            if (chunkIndex == lastChunkIndex && listIndex == lastIndex)
+            if (chunkIndex == lastChunkIndex && listIndex == lastIndex) // end entity was removed
             {
-                // end entity was removed
-                if (lastIndex == 0)
+                if (lastIndex == 0) // last chunk is empty
                 {
-                    // chunk is empty
                     Chunks.RemoveAt(lastChunkIndex);
                     Marshal.FreeHGlobal(new IntPtr(lastChunk));
                 }
@@ -224,6 +223,12 @@ namespace Zero.Game.Server
                 Buffer.MemoryCopy(lastPntr + lastIndex * elementSize, listPntr + listIndex * elementSize, elementSize, elementSize);
                 listPntr += elementSize * ChunkCapacity;
                 lastPntr += elementSize * ChunkCapacity;
+            }
+
+            if (lastIndex == 0) // last chunk is empty
+            {
+                Chunks.RemoveAt(lastChunkIndex);
+                Marshal.FreeHGlobal(new IntPtr(lastChunk));
             }
 
             // return entity id that was remapped
