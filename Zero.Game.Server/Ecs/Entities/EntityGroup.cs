@@ -130,7 +130,7 @@ namespace Zero.Game.Server
             {
                 return ref TypeCache<T>.NullRef;
             }
-            return ref *(list + listIndex);
+            return ref Unsafe.AsRef<T>(list + listIndex);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -163,6 +163,15 @@ namespace Zero.Game.Server
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public uint GetLastEntityId()
+        {
+            if (Chunks.Count == 0) return 0;
+            var chunk = (byte*)Chunks[^1].ToPointer();
+            var lastIndex = ((EntityChunkHeader*)chunk)->Count - 1;
+            return ((uint*)(chunk + sizeof(EntityChunkHeader)))[lastIndex];
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T* GetList<T>(int chunkIndex, int componentListIndex) where T : unmanaged
         {
             return GetList<T>((byte*)Chunks[chunkIndex].ToPointer(), componentListIndex);
@@ -181,28 +190,40 @@ namespace Zero.Game.Server
         /// <summary>
         /// Removes a component at the given index and returns an entityId that was remapped to the given index (0 if no remapping)
         /// </summary>
+        /// <param name="chunkIndex"></param>
         /// <param name="listIndex"></param>
-        /// <param name="remappedEntityId"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe uint Remove(int chunkIndex, int listIndex)
         {
             var chunk = (byte*)Chunks[chunkIndex].ToPointer();
-            var lastIndex = --((EntityChunkHeader*)chunk)->Count;
-            if (listIndex == lastIndex)
+            var lastChunkIndex = Chunks.Count - 1;
+            var lastChunk = (byte*)Chunks[lastChunkIndex].ToPointer();
+            var lastIndex = --((EntityChunkHeader*)lastChunk)->Count;
+            if (chunkIndex == lastChunkIndex && listIndex == lastIndex)
             {
-                // last entity was removed
+                // end entity was removed
+                if (lastIndex == 0)
+                {
+                    // chunk is empty
+                    Chunks.RemoveAt(lastChunkIndex);
+                    Marshal.FreeHGlobal(new IntPtr(lastChunk));
+                }
                 return 0;
             }
 
+            // inner entity was removed
             // patch hole by remapping the last entity
             var listPntr = chunk + sizeof(EntityChunkHeader);
-            var entityId = *((uint*)listPntr + listIndex) = *((uint*)listPntr + lastIndex); // move entity id
+            var lastPntr = lastChunk + sizeof(EntityChunkHeader);
+            var entityId = *((uint*)listPntr + listIndex) = *((uint*)lastPntr + lastIndex); // move entity id
             listPntr += sizeof(uint) * ChunkCapacity;
+            lastPntr += sizeof(uint) * ChunkCapacity;
             for (int i = 0; i < NonZeroComponentListCount; i++)
             {
                 var elementSize = ComponentSizes[i];
-                Buffer.MemoryCopy(listPntr + lastIndex * elementSize, listPntr + listIndex * elementSize, elementSize, elementSize);
+                Buffer.MemoryCopy(lastPntr + lastIndex * elementSize, listPntr + listIndex * elementSize, elementSize, elementSize);
                 listPntr += elementSize * ChunkCapacity;
+                lastPntr += elementSize * ChunkCapacity;
             }
 
             // return entity id that was remapped

@@ -487,7 +487,7 @@ namespace Zero.Game.Server
             foreach (var connection in _connections)
             {
                 connection.Disconnect();
-                connection.World.ClearConnections();
+                connection.RemoveFromWorld(_plugin, true);
                 connection.World = null;
                 connection.Clear();
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
@@ -522,7 +522,7 @@ namespace Zero.Game.Server
 
                 if (connection.World != null)
                 {
-                    connection.RemoveFromWorld(_plugin, false);
+                    connection.RemoveFromWorld(_plugin, true);
                 }
                 connection.Clear();
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
@@ -537,12 +537,14 @@ namespace Zero.Game.Server
                 return;
             }
 
+            world.Commands.Execute(); // flush commands
+
             // remove world connections
             for (int i = 0; i < world.Connections.Count; i++)
             {
                 var connection = world.Connections[i];
                 connection.Disconnect();
-                connection.RemoveFromWorld(_plugin, true);
+                connection.RemoveFromWorld(_plugin, false);
                 connection.Clear();
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
             }
@@ -562,7 +564,7 @@ namespace Zero.Game.Server
             {
                 var connection = world.Connections[i];
                 connection.Disconnect();
-                connection.RemoveFromWorld(_plugin, true);
+                connection.RemoveFromWorld(_plugin, false);
                 connection.Clear();
                 _unloadTasks.Add(UnloadConnectionAsync(connection));
             }
@@ -771,6 +773,8 @@ namespace Zero.Game.Server
             {
                 Debug.LogError(e, "An error occurred while unloading world: {0}", world.Id);
             }
+
+            world.Destroy();
             world.State = null;
             world.Dispose();
             completed?.TrySetResult(null);

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Zero.Game.Shared
 {
@@ -228,6 +229,29 @@ namespace Zero.Game.Shared
                 }
             }
         }
+
+        /*
+        public void RemovePersistent<T>() where T : unmanaged
+        {
+            var type = Data<T>.Type;
+            if (!_persistentLocationMap.TryGetValue(type, out var location)) return;
+            var dataSize = Data<T>.Size;
+            var removeSize = dataSize + 1; // 1 for the type byte
+
+            // shift buffer
+            fixed (byte* ptr = &PersistentData.Buffer[location - 1])
+            {
+                Buffer.MemoryCopy(ptr + dataSize, ptr - 1, removeSize, removeSize);
+            }
+
+            var buffer = _bufferCache.Get(_persistentLocationMap.Count);
+            _persistentLocationMap.Keys.CopyTo(buffer, 0);
+            for (int i = 0; i < _persistentLocationMap.Count; i++)
+            {
+
+            }
+        }
+        */
 
         public bool TryGetPersistent<T>(out T data) where T : unmanaged
         {

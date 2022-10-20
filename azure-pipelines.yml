@@ -11,8 +11,8 @@ pool:
 
 variables:
   buildConfiguration: 'Release'
-  major: 0
-  minor: 2
+  major: 2
+  minor: 0
   patchKey: $(major).$(minor)
   patch: $[counter(variables['$(patchKey)'], 0)] #this will reset when we bump major/minor
   NugetVersionBeta: $(major).$(minor).$(patch)

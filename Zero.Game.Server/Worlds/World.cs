@@ -16,6 +16,7 @@ namespace Zero.Game.Server
             Id = id;
             Data = data;
             EntityId = Entities.CreateEntity();
+            Entities.Commands = Commands;
         }
 
         /// <summary>
@@ -145,8 +146,9 @@ namespace Zero.Game.Server
                 return false; // return if the given component system wasn't found (already removed or give an invalid system)
             }
 
-            componentSystem.RemoveFromWorld();
             Entities.UnsubscribeSystem(componentSystem);
+            componentSystem.Remove(); // implementation logic
+            componentSystem.RemoveFromWorld();
             return true;
         }
 
@@ -164,6 +166,17 @@ namespace Zero.Game.Server
             ReportConnectionCount();
         }
 
+        internal void Destroy()
+        {
+            Entities.DestroyAllEntities();
+            _componentSystemsAlt.AddRange(_componentSystems);
+            for (int i = _componentSystemsAlt.Count - 1; i >= 0; i--) // remove systems in reverse order
+            {
+                RemoveSystem(_componentSystemsAlt[i]);
+            }
+            _componentSystemsAlt.Clear();
+        }
+
         internal void Dispose()
         {
             Entities.Dispose();
@@ -178,6 +191,7 @@ namespace Zero.Game.Server
 
         internal void Update()
         {
+            Commands.Execute();
             _componentSystemsAlt.AddRange(_componentSystems);
             for (int i = 0; i < _componentSystemsAlt.Count; i++)
             {

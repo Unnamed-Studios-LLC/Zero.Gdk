@@ -1,9 +1,8 @@
 ﻿using System;
-using Zero.Game.Shared;
 
 namespace Zero.Game.Server
 {
-    public unsafe ref struct Components
+    public unsafe struct Components
     {
         internal readonly EntityGroup Group;
         internal readonly byte* Chunk;

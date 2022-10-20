@@ -18,7 +18,10 @@ namespace Zero.Game.Server
                 ThrowHelper.ThrowInvalidEntityId();
             }
 
-            return entityData.GetPersistent<T>();
+            lock (entityData)
+            {
+                return entityData.GetPersistent<T>();
+            }
         }
 
         /// <summary>
@@ -35,7 +38,10 @@ namespace Zero.Game.Server
                 ThrowHelper.ThrowInvalidEntityId();
             }
 
-            entityData.PushEvent(Time.Total, &data);
+            lock (entityData)
+            {
+                entityData.PushEvent(Time.Total, &data);
+            }
         }
 
         /// <summary>
@@ -53,8 +59,12 @@ namespace Zero.Game.Server
                 ThrowHelper.ThrowInvalidEntityId();
             }
 
-            entityData.PushPersistent(Time.Total, &data);
+            lock (entityData)
+            {
+                entityData.PushPersistent(Time.Total, &data);
+            }
         }
+
         /// <summary>
         /// Trys to get the persistent data set for a given entity. If no data has been set, false is returned
         /// </summary>
@@ -69,7 +79,10 @@ namespace Zero.Game.Server
                 ThrowHelper.ThrowInvalidEntityId();
             }
 
-            return entityData.TryGetPersistent(out data);
+            lock (entityData)
+            {
+                return entityData.TryGetPersistent(out data);
+            }
         }
     }
 }

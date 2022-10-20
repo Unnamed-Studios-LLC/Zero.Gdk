@@ -4,7 +4,7 @@ using Zero.Game.Shared;
 
 namespace Zero.Game.Server
 {
-    public class CommandBuffer
+    public sealed class CommandBuffer
     {
         private readonly List<Action> _actions = new(100);
 
@@ -24,36 +24,20 @@ namespace Zero.Game.Server
         /// Executes command in the buffer
         /// </summary>
         /// <returns></returns>
-        public void Execute()
+        internal void Execute()
         {
-            int i;
-            do
+            for (int i = 0; i < _actions.Count; i++)
             {
-                for (i = 0; i < _actions.Count; i++)
+                try
                 {
-                    try
-                    {
-                        _actions[i].Invoke();
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError(e, "An error occured during a buffered command");
-                    }
+                    _actions[i].Invoke();
                 }
-
-                lock (_actions)
+                catch (Exception e)
                 {
-                    if (i == _actions.Count)
-                    {
-                        _actions.Clear();
-                    }
-                    else
-                    {
-                        _actions.RemoveRange(0, i);
-                    }
+                    Debug.LogError(e, "An error occured during a buffered command");
                 }
             }
-            while (i > 0); // while loop to continue execution until the buffer is empty (in case commands added more commands)
+            _actions.Clear();
         }
     }
 }

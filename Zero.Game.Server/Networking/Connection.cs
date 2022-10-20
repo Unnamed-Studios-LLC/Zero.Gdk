@@ -40,6 +40,11 @@ namespace Zero.Game.Server
         public uint EntityId { get; internal set; }
 
         /// <summary>
+        /// If this connection is connected to a world
+        /// </summary>
+        public bool InWorld => World != null;
+
+        /// <summary>
         /// Message handler for messages sent by the remote client
         /// </summary>
         public IMessageHandler MessageHandler
@@ -216,7 +221,7 @@ namespace Zero.Game.Server
             return true;
         }
 
-        internal void RemoveFromWorld(ServerPlugin plugin, bool stopping)
+        internal void RemoveFromWorld(ServerPlugin plugin, bool removeFromWorldList)
         {
             try
             {
@@ -228,10 +233,7 @@ namespace Zero.Game.Server
             }
 
             World.Entities.DestroyEntity(EntityId);
-            if (!stopping)
-            {
-                World.RemoveConnection(this);
-            }
+            if (removeFromWorldList) World.RemoveConnection(this);
             EntityId = 0;
             World = null;
         }

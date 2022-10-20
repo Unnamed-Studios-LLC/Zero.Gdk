@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Diagnostics;
 using Zero.Game.Shared;
+using Debug = Zero.Game.Shared.Debug;
 
 namespace Zero.Game.Server
 {
@@ -16,6 +18,11 @@ namespace Zero.Game.Server
         /// Access to world entities
         /// </summary>
         public Entities Entities { get; private set; }
+
+        /// <summary>
+        /// The duration of Update last update
+        /// </summary>
+        public long LastUpdateDuration { get; internal set; }
 
         /// <summary>
         /// The world being executed in
@@ -36,8 +43,21 @@ namespace Zero.Game.Server
             Commands = null;
         }
 
+        internal void Remove()
+        {
+            try
+            {
+                OnRemove();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e, "An error occurred during {0}", nameof(OnRemove));
+            }
+        }
+
         internal void Update()
         {
+            var t = Stopwatch.GetTimestamp();
             if (!_started)
             {
                 _started = true;
@@ -61,6 +81,7 @@ namespace Zero.Game.Server
             }
 
             Commands.Execute();
+            LastUpdateDuration = Stopwatch.GetTimestamp() - t;
         }
 
         protected void AddSystem<T>(T system) where T : ComponentSystem => World.AddSystem(system);
@@ -70,5 +91,6 @@ namespace Zero.Game.Server
 
         protected virtual void OnStart() { }
         protected virtual void OnUpdate() { }
+        protected virtual void OnRemove() { }
     }
 }

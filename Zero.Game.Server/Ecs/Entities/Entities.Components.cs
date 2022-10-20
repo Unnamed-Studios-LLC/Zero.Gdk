@@ -6,6 +6,16 @@ namespace Zero.Game.Server
     public sealed partial class Entities
     {
         /// <summary>
+        /// Shared command buffer for the world
+        /// </summary>
+        public CommandBuffer Commands { get; internal set; }
+
+        /// <summary>
+        /// The count of entities contained
+        /// </summary>
+        public int EntityCount { get; internal set; }
+
+        /// <summary>
         /// Adds a new component to a given entity. If the component already exists, the values are overriden.
         /// This operation invokes a structural change and cannot be called within queries or from threads other than the main thread.
         /// </summary>
@@ -187,6 +197,7 @@ namespace Zero.Game.Server
             var reference = new EntityReference(null, 0, 0);
             _entityLocationMap.Add(id, reference);
             _entityData.Add(id, GetEntityData());
+            EntityCount++;
             return id;
         }
 
@@ -248,6 +259,27 @@ namespace Zero.Game.Server
         }
 
         /// <summary>
+        /// Destroys all entities
+        /// This operation invokes a structural change and cannot be called within queries or from threads other than the main thread.
+        /// </summary>
+        public void DestroyAllEntities()
+        {
+            ThrowIfIterating();
+
+            for (int i = 0; i < _groups.Count; i++)
+            {
+                var group = _groups[i];
+                while (true)
+                {
+                    var entityId = group.GetLastEntityId(); // destroy entities backwards to avoid component patching
+                    if (entityId == 0) break;
+                    DestroyEntity(entityId);
+                }
+            }
+            EntityCount = 0;
+        }
+
+        /// <summary>
         /// Destroy an entity given the entity's id
         /// This operation invokes a structural change and cannot be called within queries or from threads other than the main thread.
         /// </summary>
@@ -277,6 +309,7 @@ namespace Zero.Game.Server
                     _entityLocationMap[remappedEntity] = reference;
                 }
             }
+            EntityCount--;
         }
 
         /// <summary>
