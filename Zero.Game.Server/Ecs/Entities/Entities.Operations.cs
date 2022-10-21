@@ -47,11 +47,12 @@ namespace Zero.Game.Server
         private static void CopyOverlapingComponents(ref EntityReference source, ref EntityReference destination)
         {
             int j = -1;
-            int destinationType;
+            int destinationType = -1;
             for (int i = 0; i < source.Group.NonZeroComponentListCount; i++)
             {
                 var sourceType = source.Group.NonZeroComponentTypes[i];
-                do
+
+                while (destinationType < sourceType)
                 {
                     if (++j >= destination.Group.NonZeroComponentListCount)
                     {
@@ -59,11 +60,13 @@ namespace Zero.Game.Server
                     }
                     destinationType = destination.Group.NonZeroComponentTypes[j];
                 }
-                while (destinationType != sourceType);
 
-                var srcPtr = source.Group.GetComponent(source.ChunkIndex, i, source.ListIndex, out var size);
-                var dstPtr = destination.Group.GetComponent(destination.ChunkIndex, j, destination.ListIndex, out size);
-                Buffer.MemoryCopy(srcPtr, dstPtr, size, size);
+                if (destinationType == sourceType)
+                {
+                    var srcPtr = source.Group.GetComponent(source.ChunkIndex, i, source.ListIndex, out var size);
+                    var dstPtr = destination.Group.GetComponent(destination.ChunkIndex, j, destination.ListIndex, out size);
+                    Buffer.MemoryCopy(srcPtr, dstPtr, size, size);
+                }
             }
         }
 

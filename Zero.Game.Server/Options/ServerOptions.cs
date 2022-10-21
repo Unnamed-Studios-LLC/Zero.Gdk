@@ -27,7 +27,7 @@ namespace Zero.Game.Server
         /// <summary>
         /// The target update delta in ms
         /// </summary>
-        public int UpdateIntervalMs { get; set; } = 50;
+        public uint UpdateIntervalMs { get; set; } = 50;
         /// <summary>
         /// The amount of updates to occur before view queries are called
         /// </summary>

@@ -269,21 +269,13 @@ namespace Zero.Game.Shared
                     var remaining = SizeToReceive - _received;
                     _receiveArgs.SetBuffer(_received, remaining);
 
-                    try
+                    if (_socket.ReceiveAsync(args))
                     {
-                        if (_socket.ReceiveAsync(args))
-                        {
-                            return;
-                        }
-                    }
-                    catch (ObjectDisposedException) { }
-                    catch (Exception e)
-                    {
-                        Debug.LogError(e, $"An error occurred during {nameof(ProcessReceived)}");
-                        Disconnect();
+                        return;
                     }
                 }
             }
+            catch (ObjectDisposedException) { }
             catch (Exception e)
             {
                 Debug.LogError(e, "An unexpected receive error occurred");

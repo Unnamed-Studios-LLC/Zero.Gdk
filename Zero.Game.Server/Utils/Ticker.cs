@@ -9,15 +9,15 @@ namespace Zero.Game.Server
 
         private readonly ManualResetEvent _waitEvent = new(false);
         private readonly Stopwatch _stopwatch = new();
-        private readonly int _tickInterval;
+        private readonly uint _tickInterval;
 
-        public Ticker(int tickInterval)
+        public Ticker(uint tickInterval)
         {
             _tickInterval = tickInterval;
             Delta = tickInterval;
         }
 
-        public int Delta { get; private set; }
+        public uint Delta { get; private set; }
         public int LastUpdateDuration { get; private set; }
         public long Total { get; private set; }
 
@@ -53,7 +53,7 @@ namespace Zero.Game.Server
                 while (delay > 0);
             }
 
-            Delta = (int)(_stopwatch.ElapsedMilliseconds - Total);
+            Delta = (uint)(_stopwatch.ElapsedMilliseconds - Total);
             Total = _stopwatch.ElapsedMilliseconds;
         }
     }

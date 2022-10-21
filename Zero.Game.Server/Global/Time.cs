@@ -28,7 +28,7 @@ namespace Zero.Game.Server
             }
         }
 
-        public static int Delta { get; internal set; }
+        public static uint Delta { get; internal set; }
         public static float DeltaF => Delta / 1000f;
 
         public static long LastUpdateDuration { get; internal set; }

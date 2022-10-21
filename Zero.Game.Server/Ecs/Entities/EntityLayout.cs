@@ -75,48 +75,61 @@ namespace Zero.Game.Server
         internal void Set(uint entityId, ref EntityReference reference, EntityArchetype previousArchetype, Entities entities)
         {
             int j = 0;
-            EntityLayoutComponent component;
+            EntityLayoutComponent component = null;
             byte* chunk = (byte*)reference.Group.Chunks[reference.ChunkIndex].ToPointer();
             for (int i = 0; i < reference.Group.NonZeroComponentListCount; i++)
             {
                 var sourceType = reference.Group.NonZeroComponentTypes[i];
                 var list = chunk + reference.Group.ComponentListOffsets[i];
-                do
+                if (component == null || component.Type < sourceType)
                 {
-                    if (j >= _components.Count)
+                    do
                     {
-                        return;
+                        if (j >= _components.Count)
+                        {
+                            return;
+                        }
+                        component = _components.Values[j++];
                     }
-                    component = _components.Values[j++];
+                    while (component.Type < sourceType);
                 }
-                while (component.Type != sourceType);
 
-                var isAdded = previousArchetype.Archetypes != null && !previousArchetype.Contains(sourceType);
-                component.Set(list, reference.ListIndex);
+                if (component.Type == sourceType)
+                {
+                    var isAdded = previousArchetype.Archetypes != null && !previousArchetype.Contains(sourceType);
+                    component.Set(list, reference.ListIndex);
+                }
             }
 
+            component = null;
             j = 0;
             for (int i = 0; i < reference.Group.ComponentListCount; i++)
             {
                 var sourceType = reference.Group.ComponentTypes[i];
                 var list = chunk + reference.Group.ComponentListOffsets[i];
-                do
+                if (component == null || component.Type < sourceType)
                 {
-                    if (j >= _components.Count)
+                    do
                     {
-                        return;
+                        if (j >= _components.Count)
+                        {
+                            return;
+                        }
+                        component = _components.Values[j++];
                     }
-                    component = _components.Values[j++];
+                    while (component.Type < sourceType);
                 }
-                while (component.Type != sourceType);
 
-                var isAdded = previousArchetype.Archetypes == null || !previousArchetype.Contains(sourceType);
-                if (!isAdded)
+                if (component.Type == sourceType)
                 {
-                    continue;
-                }
+                    var isAdded = previousArchetype.Archetypes == null || !previousArchetype.Contains(sourceType);
+                    if (!isAdded)
+                    {
+                        continue;
+                    }
 
-                component.PublishAdd(entityId, list, reference.ListIndex, entities);
+                    component.PublishAdd(entityId, list, reference.ListIndex, entities);
+                }
             }
         }
     }
