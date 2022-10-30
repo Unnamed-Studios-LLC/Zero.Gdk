@@ -32,14 +32,14 @@ namespace Zero.Game.Server
         }
 
         private readonly SortedList<int, EntityLayoutComponent> _components = new();
-        private readonly Dictionary<int, EntityLayoutComponent> _componentMap = new();
 
-        internal EntityArchetype Archetype { get; private set; } = new EntityArchetype(Array.Empty<ulong>());
+        internal EntityArchetype AddArchetype { get; private set; } = new EntityArchetype(Array.Empty<ulong>());
+        internal EntityArchetype RemoveArchetype { get; private set; } = new EntityArchetype(Array.Empty<ulong>());
 
-        public unsafe EntityLayout Define<T>(T @default = default) where T : unmanaged
+        public unsafe EntityLayout DefineAdd<T>(T @default = default) where T : unmanaged
         {
             var type = TypeCache<T>.Type;
-            if (_componentMap.TryGetValue(type, out var component))
+            if (_components.TryGetValue(type, out var component))
             {
                 ((EntityLayoutComponent<T>)component).Default = @default;
                 return this;
@@ -51,23 +51,57 @@ namespace Zero.Game.Server
             };
 
             var typeDepth = type / 64;
-            if (typeDepth >= Archetype.DepthCount)
+            if (typeDepth >= AddArchetype.DepthCount)
             {
                 var newArchetypes = new ulong[typeDepth + 1];
                 fixed (ulong* newArchPntr = newArchetypes)
-                fixed (ulong* curArchPntr = Archetype.Archetypes)
+                fixed (ulong* curArchPntr = AddArchetype.Archetypes)
                 {
-                    for (int i = 0; i < Archetype.DepthCount; i++)
+                    for (int i = 0; i < AddArchetype.DepthCount; i++)
                     {
                         *(newArchPntr + i) = *(curArchPntr + i);
                     }
                 }
-                Archetype = new EntityArchetype(newArchetypes);
+                AddArchetype = new EntityArchetype(newArchetypes);
             }
-            Archetype.Archetypes[typeDepth] |= 1ul << (type % 64);
+            AddArchetype.Archetypes[typeDepth] |= 1ul << (type % 64);
+
+            // remove type from remove archetype
+            if (type < RemoveArchetype.DepthCount)
+            {
+                RemoveArchetype.Archetypes[typeDepth] &= ~(1ul << (type % 64));
+            }
             
-            _components.Add(TypeCache<T>.Type, typedComponent);
-            _componentMap.Add(type, typedComponent);
+            _components.Add(type, typedComponent);
+
+            return this;
+        }
+
+        public unsafe EntityLayout DefineRemove<T>() where T : unmanaged
+        {
+            var type = TypeCache<T>.Type;
+            var typeDepth = type / 64;
+            if (typeDepth >= RemoveArchetype.DepthCount)
+            {
+                var newArchetypes = new ulong[typeDepth + 1];
+                fixed (ulong* newArchPntr = newArchetypes)
+                fixed (ulong* curArchPntr = RemoveArchetype.Archetypes)
+                {
+                    for (int i = 0; i < RemoveArchetype.DepthCount; i++)
+                    {
+                        *(newArchPntr + i) = *(curArchPntr + i);
+                    }
+                }
+                RemoveArchetype = new EntityArchetype(newArchetypes);
+            }
+            RemoveArchetype.Archetypes[typeDepth] |= 1ul << (type % 64);
+
+            // remove type from add archetype
+            if (type < AddArchetype.DepthCount)
+            {
+                AddArchetype.Archetypes[typeDepth] &= ~(1ul << (type % 64));
+                _components.Remove(type);
+            }
 
             return this;
         }

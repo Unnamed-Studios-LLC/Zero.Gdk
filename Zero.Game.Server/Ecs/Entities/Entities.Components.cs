@@ -16,6 +16,11 @@ namespace Zero.Game.Server
         public int EntityCount { get; internal set; }
 
         /// <summary>
+        /// The world containing the entities
+        /// </summary>
+        public World World { get; internal set; }
+
+        /// <summary>
         /// Adds a new component to a given entity. If the component already exists, the values are overriden.
         /// This operation invokes a structural change and cannot be called within queries or from threads other than the main thread.
         /// </summary>
@@ -26,6 +31,7 @@ namespace Zero.Game.Server
         public unsafe ref T AddComponent<T>(uint entityId, T component = default) where T : unmanaged
         {
             ThrowIfIterating();
+            ThrowIfInEvent();
             if (!_entityLocationMap.TryGetValue(entityId, out var reference)) // no entity found
             {
                 ThrowHelper.ThrowInvalidEntityId();
@@ -110,7 +116,9 @@ namespace Zero.Game.Server
             }
 
             ThrowIfIterating();
-            if (layout.Archetype.Archetypes.Length == 0)
+            ThrowIfInEvent();
+            if (layout.AddArchetype.Archetypes.Length == 0 &&
+                layout.RemoveArchetype.Archetypes.Length == 0)
             {
                 return;
             }
@@ -130,7 +138,8 @@ namespace Zero.Game.Server
             }
             else
             {
-                if (!reference.Group.Archetype.ContainsAll(layout.Archetype))
+                if (!reference.Group.Archetype.ContainsAll(layout.AddArchetype) ||
+                    reference.Group.Archetype.ContainsAny(layout.RemoveArchetype))
                 {
                     // archetype change
                     archetypeChange = true;
@@ -141,14 +150,27 @@ namespace Zero.Game.Server
             if (archetypeChange)
             {
                 // get new archetype bit field
-                var layoutDepth = layout.Archetype.DepthCount;
+                var layoutAddDepth = layout.AddArchetype.DepthCount;
+                var layoutRemoveDepth = layout.RemoveArchetype.DepthCount;
                 var currentDepth = reference.Group == null ? 0 : reference.Group.Archetype.DepthCount;
-                var maxDepth = layoutDepth > currentDepth ? layoutDepth : currentDepth;
+
+                // decrement depth if removing whole types in higher indices
+                if (reference.Group != null && layoutRemoveDepth >= currentDepth)
+                {
+                    while ((reference.Group.Archetype.Archetypes[currentDepth - 1] & ~layout.RemoveArchetype.Archetypes[currentDepth - 1]) == 0 ||
+                        reference.Group.Archetype.Archetypes[currentDepth - 1] == 0)
+                    {
+                        currentDepth--;
+                    }
+                }
+
+                var maxDepth = layoutAddDepth > currentDepth ? layoutAddDepth : currentDepth;
                 ulong* archetypes = stackalloc ulong[maxDepth];
 
-                fixed (ulong* archPntr = layout.Archetype.Archetypes)
+                // apply layout add archetypes
+                fixed (ulong* archPntr = layout.AddArchetype.Archetypes)
                 {
-                    for (int i = 0; i < layoutDepth; i++)
+                    for (int i = 0; i < layoutAddDepth; i++)
                     {
                         *(archetypes + i) = *(archPntr + i);
                     }
@@ -157,10 +179,12 @@ namespace Zero.Game.Server
                 if (reference.Group != null)
                 {
                     fixed (ulong* archPntr = reference.Group.Archetype.Archetypes)
+                    fixed (ulong* removeArchPntr = layout.RemoveArchetype.Archetypes)
                     {
                         for (int i = 0; i < currentDepth; i++)
                         {
-                            *(archetypes + i) |= *(archPntr + i);
+                            if (i < layoutRemoveDepth) *(archetypes + i) |= (*(archPntr + i)) & (~*(removeArchPntr + i)); // apply with remove mask
+                            else *(archetypes + i) |= *(archPntr + i); // apply
                         }
                     }
                 }
@@ -171,14 +195,36 @@ namespace Zero.Game.Server
                 if (copyOld)
                 {
                     CopyOverlapingComponents(ref reference, ref newReference);
+
+
+                    // publish remove events before patching (so we can access the removed components)
+                    // loop existing types on old archetype and publish event from types removed
+                    for (int i = 0; i < reference.Group.ComponentListCount; i++)
+                    {
+                        var type = reference.Group.ComponentTypes[i];
+                        var typeDepth = type / 64;
+                        if (typeDepth >= layoutRemoveDepth ||
+                            (layout.RemoveArchetype.Archetypes[typeDepth] & (1ul << (type % 64))) == 0)
+                        {
+                            continue; // type not removed
+                        }
+
+                        // type was removed
+                        TypeCache.RemoveEventPublishers[type](this, entityId, in reference);
+                    }
+
+                    _entityLocationMap[entityId] = newReference;
                     var remappedEntity = reference.Group.Remove(reference.ChunkIndex, reference.ListIndex);
                     if (remappedEntity != 0)
                     {
                         _entityLocationMap[remappedEntity] = reference;
                     }
                 }
+                else
+                {
+                    _entityLocationMap[entityId] = newReference;
+                }
 
-                _entityLocationMap[entityId] = newReference;
                 reference = newReference;
             }
 
@@ -193,6 +239,7 @@ namespace Zero.Game.Server
         public uint CreateEntity()
         {
             ThrowIfIterating();
+            ThrowIfInEvent();
             var id = GenerateEntityId();
             var reference = new EntityReference(null, 0, 0);
             _entityLocationMap.Add(id, reference);
@@ -228,6 +275,7 @@ namespace Zero.Game.Server
         public unsafe uint Clone(uint sourceEntityId)
         {
             ThrowIfIterating();
+            ThrowIfInEvent();
             if (!_entityLocationMap.TryGetValue(sourceEntityId, out var reference))
             {
                 ThrowHelper.ThrowInvalidEntityId();
@@ -265,6 +313,7 @@ namespace Zero.Game.Server
         public void DestroyAllEntities()
         {
             ThrowIfIterating();
+            ThrowIfInEvent();
 
             for (int i = 0; i < _groups.Count; i++)
             {
@@ -287,6 +336,7 @@ namespace Zero.Game.Server
         public unsafe void DestroyEntity(uint entityId)
         {
             ThrowIfIterating();
+            ThrowIfInEvent();
             if (!_entityLocationMap.TryGetValue(entityId, out var reference))
             {
                 ThrowHelper.ThrowInvalidEntityId();
@@ -358,7 +408,7 @@ namespace Zero.Game.Server
         /// </summary>
         /// <param name="entityId"></param>
         /// <returns></returns>
-        public unsafe Components GetComponents(uint entityId)
+        public unsafe EntityComponents GetComponents(uint entityId)
         {
             if (!_entityLocationMap.TryGetValue(entityId, out var reference)) // no entity found
             {
@@ -367,10 +417,10 @@ namespace Zero.Game.Server
 
             if (reference.Group == null)
             {
-                return new Components(reference.Group, null, -1);
+                return new EntityComponents(reference.Group, null, -1);
             }
 
-            return new Components(reference.Group, reference.Group.GetChunk(reference.ChunkIndex), reference.ListIndex);
+            return new EntityComponents(reference.Group, reference.Group.GetChunk(reference.ChunkIndex), reference.ListIndex);
         }
 
         /// <summary>
@@ -425,6 +475,7 @@ namespace Zero.Game.Server
         public unsafe void RemoveComponent<T>(uint entityId) where T : unmanaged
         {
             ThrowIfIterating();
+            ThrowIfInEvent();
             if (!_entityLocationMap.TryGetValue(entityId, out var reference)) // no entity found
             {
                 ThrowHelper.ThrowInvalidEntityId();
@@ -499,7 +550,6 @@ namespace Zero.Game.Server
         /// <param name="disabled"></param>
         public void SetDisabled(uint entityId, bool disabled)
         {
-            ThrowIfIterating();
             if (disabled)
             {
                 AddComponent<Disabled>(entityId);

@@ -2,13 +2,13 @@
 
 namespace Zero.Game.Server
 {
-    public unsafe struct Components
+    public unsafe struct EntityComponents
     {
         internal readonly EntityGroup Group;
         internal readonly byte* Chunk;
         internal readonly int Index;
 
-        internal Components(EntityGroup group, byte* chunk, int index)
+        internal EntityComponents(EntityGroup group, byte* chunk, int index)
         {
             Group = group;
             Chunk = chunk;
@@ -53,7 +53,7 @@ namespace Zero.Game.Server
         /// <typeparam name="T"></typeparam>
         /// <param name="entityId"></param>
         /// <returns></returns>
-        public bool HasComponent<T>(uint entityId) where T : unmanaged
+        public bool HasComponent<T>() where T : unmanaged
         {
             if (Group == null)
             {

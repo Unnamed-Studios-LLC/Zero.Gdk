@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Zero.Game.Shared;
 
 namespace Zero.Game.Server
 {
@@ -66,6 +68,8 @@ namespace Zero.Game.Server
             }
         }
 
+        private bool _inEvent = false;
+
         private readonly Dictionary<int, List<object>> _addEvents = new();
         private readonly Dictionary<int, List<object>> _removeEvents = new();
 
@@ -79,7 +83,19 @@ namespace Zero.Game.Server
 
             for (int i = 0; i < eventList.Count; i++)
             {
-                ((IAddEvent<T>)eventList[i]).OnAdd(entityId, ref component);
+                try
+                {
+                    _inEvent = true;
+                    ((IAddEvent<T>)eventList[i]).OnAdd(entityId, ref component);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e, "An error occured during {0}", nameof(IAddEvent<T>.OnAdd));
+                }
+                finally
+                {
+                    _inEvent = false;
+                }
             }
             return true;
         }
@@ -94,7 +110,19 @@ namespace Zero.Game.Server
 
             for (int i = 0; i < eventList.Count; i++)
             {
-                ((IRemoveEvent<T>)eventList[i]).OnRemove(entityId, in component);
+                try
+                {
+                    _inEvent = true;
+                    ((IRemoveEvent<T>)eventList[i]).OnRemove(entityId, in component);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e, "An error occured during {0}", nameof(IRemoveEvent<T>.OnRemove));
+                }
+                finally
+                {
+                    _inEvent = false;
+                }
             }
 
             return true;

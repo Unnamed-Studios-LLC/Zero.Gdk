@@ -90,8 +90,7 @@ namespace Zero.Game.Shared
         public T GetPersistent<T>() where T : unmanaged
         {
             var type = Data<T>.Type;
-            var location = _persistentLocationMap[type];
-            if (location == 0 ||
+            if (!_persistentLocationMap.TryGetValue(type, out var location) ||
                 Data<T>.ZeroSize)
             {
                 return default;
@@ -113,7 +112,7 @@ namespace Zero.Game.Shared
             return time == _oneOffTime && (EventData.Count != 0 || PersistentUpdatedData.Count != 0);
         }
 
-        public void PushEvent<T>(long time, T* data) where T : unmanaged
+        public void PushEvent<T>(long time, ref T data) where T : unmanaged
         {
             ClearOneOff(time);
 
@@ -176,7 +175,7 @@ namespace Zero.Game.Shared
                 {
                     fixed (byte* buffer = &EventData.Buffer[EventData.ByteLength])
                     {
-                        *(T*)buffer = *data;
+                        *(T*)buffer = data;
                     }
                 }
             }
@@ -189,7 +188,7 @@ namespace Zero.Game.Shared
                     *buffer = type;
                     if (dataSize != 0)
                     {
-                        *(T*)(buffer + 1) = *data;
+                        *(T*)(buffer + 1) = data;
                     }
                 }
                 _lastEventType = type;
@@ -198,9 +197,9 @@ namespace Zero.Game.Shared
             EventData.ByteLength = newSize;
         }
 
-        public void PushPersistent<T>(long time, T* data) where T : unmanaged
+        public void PushPersistent<T>(long time, ref T data) where T : unmanaged
         {
-            PushPersistentUpdate(time, data);
+            PushPersistentUpdate(time, ref data);
 
             var type = Data<T>.Type;
             var dataSize = Data<T>.Size;
@@ -225,7 +224,7 @@ namespace Zero.Game.Shared
             {
                 fixed (byte* buffer = &PersistentData.Buffer[location])
                 {
-                    *(T*)buffer = *data;
+                    *(T*)buffer = data;
                 }
             }
         }
@@ -256,8 +255,7 @@ namespace Zero.Game.Shared
         public bool TryGetPersistent<T>(out T data) where T : unmanaged
         {
             var type = Data<T>.Type;
-            var location = _persistentLocationMap[type];
-            if (location == 0)
+            if (!_persistentLocationMap.TryGetValue(type, out var location))
             {
                 data = default;
                 return false;
@@ -319,7 +317,7 @@ namespace Zero.Game.Shared
         private void ExpandPersistentData(int minSize) => Expand(ref PersistentData, minSize);
         private void ExpandPersistentUpdatedData(int minSize) => Expand(ref PersistentUpdatedData, minSize);
 
-        private void PushPersistentUpdate<T>(long time, T* data) where T : unmanaged
+        private void PushPersistentUpdate<T>(long time, ref T data) where T : unmanaged
         {
             ClearOneOff(time);
 
@@ -332,7 +330,7 @@ namespace Zero.Game.Shared
                 {
                     fixed (byte* buffer = &PersistentUpdatedData.Buffer[location])
                     {
-                        *(T*)buffer = *data;
+                        *(T*)buffer = data;
                     }
                 }
                 return;
@@ -351,7 +349,7 @@ namespace Zero.Game.Shared
                 *buffer = type;
                 if (dataSize != 0)
                 {
-                    *(T*)(buffer + 1) = *data;
+                    *(T*)(buffer + 1) = data;
                 }
             }
 

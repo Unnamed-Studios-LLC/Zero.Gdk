@@ -9,7 +9,7 @@ namespace Zero.Game.Server
 {
     public unsafe partial class Entities
     {
-        internal static bool AllowStructuralChange = true;
+        internal static bool AllowStructuralChangeGlobal = true;
         internal bool RunningInParallel = false;
 
         private readonly List<EntityGroup> _groups = new();
@@ -231,6 +231,87 @@ namespace Zero.Game.Server
             }
         }
 
+        private unsafe void RemoveComponents(uint entityId, ulong* removeArchetype, int removeDepth)
+        {
+            ThrowIfIterating();
+            ThrowIfInEvent();
+            if (!_entityLocationMap.TryGetValue(entityId, out var reference)) // no entity found
+            {
+                ThrowHelper.ThrowInvalidEntityId();
+            }
+
+            var newArchetype = false;
+            if (reference.Group == null ||
+                !reference.Group.Archetype.ContainsAny(removeArchetype, removeDepth)) // no group or type of component found
+            {
+                return;
+            }
+
+            newArchetype = !reference.Group.Archetype.ContainsAll(removeArchetype, removeDepth);
+
+            EntityReference newReference;
+            if (newArchetype)
+            {
+                // get new archetype bit field
+
+                // decrement depth if removing whole types in higher indices
+                var currentDepth = reference.Group.Archetype.DepthCount;
+                if (removeDepth >= currentDepth)
+                {
+                    while ((reference.Group.Archetype.Archetypes[currentDepth - 1] & ~removeArchetype[currentDepth - 1]) == 0 ||
+                        reference.Group.Archetype.Archetypes[currentDepth - 1] == 0)
+                    {
+                        currentDepth--;
+                    }
+                }
+
+                // create new archetypes
+                ulong* archetypes = stackalloc ulong[currentDepth];
+                fixed (ulong* archPntr = reference.Group.Archetype.Archetypes)
+                {
+                    for (int i = 0; i < currentDepth; i++)
+                    {
+                        if (i < removeDepth) *(archetypes + i) = (*(archPntr + i)) & (~*(removeArchetype + i));
+                        else *(archetypes + i) = *(archPntr + i);
+                    }
+                }
+
+                EnsureGroup(archetypes, currentDepth, out var newGroup);
+                newReference = newGroup.GetNextSlot(entityId);
+
+                CopyOverlapingComponents(ref reference, ref newReference);
+            }
+            else
+            {
+                newReference = new EntityReference(null, 0, 0);
+            }
+
+            _entityLocationMap[entityId] = newReference;
+
+            // publish remove events before patching (so we can access the removed components)
+            // loop existing types on old archetype and publish event from types removed
+            for (int i = 0; i < reference.Group.ComponentListCount; i++)
+            {
+                var type = reference.Group.ComponentTypes[i];
+                var typeDepth = type / 64;
+                if (typeDepth >= removeDepth ||
+                    (removeArchetype[typeDepth] & (1ul << (type % 64))) == 0)
+                {
+                    continue; // type not removed
+                }
+
+                // type was removed
+                TypeCache.RemoveEventPublishers[type](this, entityId, in reference);
+            }
+
+            // now patch and remap entity (we are done with old entity data)
+            var remappedEntity = reference.Group.Remove(reference.ChunkIndex, reference.ListIndex);
+            if (remappedEntity != 0)
+            {
+                _entityLocationMap[remappedEntity] = reference;
+            }
+        }
+
         private void ReturnEntityData(EntityData data)
         {
             data.Clear();
@@ -245,11 +326,21 @@ namespace Zero.Game.Server
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ThrowIfIterating()
         {
-            if (!_iterating && AllowStructuralChange)
+            if (!_iterating && AllowStructuralChangeGlobal)
             {
                 return;
             }
             throw new Exception("Entity structural change is not allowed while iterating. Use a command buffer to execute changes after the iteration");
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ThrowIfInEvent()
+        {
+            if (!_inEvent)
+            {
+                return;
+            }
+            throw new Exception("Entity structural change is not allowed during an event. Use a command buffer to execute changes after the iteration");
         }
 
         private void ZeroFilters()

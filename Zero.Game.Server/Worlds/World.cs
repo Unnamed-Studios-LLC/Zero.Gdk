@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Zero.Game.Server
 {
-    public class World
+    public sealed class World : IEntity
     {
         private readonly List<ComponentSystem> _componentSystems = new();
         private readonly List<ComponentSystem> _componentSystemsAlt = new();
@@ -17,6 +17,7 @@ namespace Zero.Game.Server
             Data = data;
             EntityId = Entities.CreateEntity();
             Entities.Commands = Commands;
+            Entities.World = this;
         }
 
         /// <summary>

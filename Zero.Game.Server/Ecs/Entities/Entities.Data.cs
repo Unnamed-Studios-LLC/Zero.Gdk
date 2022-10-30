@@ -30,7 +30,7 @@ namespace Zero.Game.Server
         /// <typeparam name="T"></typeparam>
         /// <param name="entityId"></param>
         /// <returns></returns>
-        public void PushEvent<T>(uint entityId, T data) where T : unmanaged
+        public void PushEvent<T>(uint entityId, ref T data) where T : unmanaged
         {
             ThrowHelper.ThrowIfDataNotDefined<T>();
             if (!_entityData.TryGetValue(entityId, out var entityData))
@@ -40,7 +40,36 @@ namespace Zero.Game.Server
 
             lock (entityData)
             {
-                entityData.PushEvent(Time.Total, &data);
+                entityData.PushEvent(Time.Total, ref data);
+            }
+        }
+
+        /// <summary>
+        /// Pushes event data for an entity. Event data is pushed once to containing views
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entityId"></param>
+        /// <returns></returns>
+        public void PushEvent<T>(uint entityId, T data) where T : unmanaged => PushEvent(entityId, ref data);
+
+        /// <summary>
+        /// Pushes persistent data for an entity. Persistent data is stored as part of the entity and pushed to views when they first are "aware" of an entity.
+        /// Persistent data changes are also pushed as events to any views that are already "aware" of the entity
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entityId"></param>
+        /// <returns></returns>
+        public void PushPersistent<T>(uint entityId, ref T data) where T : unmanaged
+        {
+            ThrowHelper.ThrowIfDataNotDefined<T>();
+            if (!_entityData.TryGetValue(entityId, out var entityData))
+            {
+                ThrowHelper.ThrowInvalidEntityId();
+            }
+
+            lock (entityData)
+            {
+                entityData.PushPersistent(Time.Total, ref data);
             }
         }
 
@@ -51,19 +80,7 @@ namespace Zero.Game.Server
         /// <typeparam name="T"></typeparam>
         /// <param name="entityId"></param>
         /// <returns></returns>
-        public void PushPersistent<T>(uint entityId, T data) where T : unmanaged
-        {
-            ThrowHelper.ThrowIfDataNotDefined<T>();
-            if (!_entityData.TryGetValue(entityId, out var entityData))
-            {
-                ThrowHelper.ThrowInvalidEntityId();
-            }
-
-            lock (entityData)
-            {
-                entityData.PushPersistent(Time.Total, &data);
-            }
-        }
+        public void PushPersistent<T>(uint entityId, T data) where T : unmanaged => PushPersistent(entityId, ref data);
 
         /// <summary>
         /// Trys to get the persistent data set for a given entity. If no data has been set, false is returned

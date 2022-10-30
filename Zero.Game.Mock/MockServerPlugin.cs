@@ -25,8 +25,8 @@ namespace Zero.Game.Mock
         public override Task<bool> LoadWorldAsync(World world)
         {
             var layout = new EntityLayout()
-                .Define<PositionComponent>()
-                .Define<TestComponent>();
+                .DefineAdd<PositionComponent>()
+                .DefineAdd<TestComponent>();
 
             world.AddSystem(new MockSystem());
             world.Entities.ApplyLayout(world.EntityId, layout);

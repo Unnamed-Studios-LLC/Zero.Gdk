@@ -2,12 +2,20 @@
 
 namespace Zero.Game.Shared.Messaging
 {
-    [StructLayout(LayoutKind.Explicit, Size = 12)]
-    public readonly struct TransferMessage
+    [StructLayout(LayoutKind.Explicit, Size = Size)]
+    public unsafe struct TransferMessage
     {
+        public const int Size = 4 + IpLength + KeyLength;
+        public const int IpLength = 16;
+        public const int KeyLength = ConnectionSocket.KeyLength;
+
         [FieldOffset(0)]
-        public readonly int Port;
+        public ushort Port;
+        [FieldOffset(2)]
+        public ushort IpSize;
         [FieldOffset(4)]
-        public readonly long Ip;
+        public fixed byte Ip[IpLength];
+        [FieldOffset(4 + IpLength)]
+        public fixed byte Key[KeyLength];
     }
 }

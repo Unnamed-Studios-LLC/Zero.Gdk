@@ -11,6 +11,16 @@ namespace Zero.Game.Server
         public HashSet<uint> NewEntities { get; } = new(100);
         public List<uint> RemovedEntities { get; } = new(100);
 
+        public void Clear()
+        {
+            QueryEntities.Clear();
+            UniqueEntities.Clear();
+            ProcessedEntities.Clear();
+            LastEntities.Clear();
+            NewEntities.Clear();
+            RemovedEntities.Clear();
+        }
+
         public void StageEntities()
         {
             (UniqueEntities, LastEntities) = (LastEntities, UniqueEntities);

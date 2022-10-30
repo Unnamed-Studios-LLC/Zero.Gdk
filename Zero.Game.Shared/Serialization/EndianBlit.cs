@@ -95,7 +95,7 @@ namespace Zero.Game.Shared
         private static SwapDelegate GenerateSwapStruct(Type type)
         {
             var list = new List<SwapDelegate>();
-            var fields = type.GetFields()
+            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .Select(x => (GetFieldOffset(x), x))
                 .OrderBy(x => x.Item1);
 

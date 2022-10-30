@@ -2,8 +2,9 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+using System.Text;
 using Zero.Game.Shared;
+using Zero.Game.Shared.Messaging;
 
 [assembly: InternalsVisibleTo("Zero.Game.Tests")]
 
@@ -24,6 +25,7 @@ namespace Zero.Game.Client
         private readonly int _sendBufferSize;
         private readonly int _receiveBufferSize;
         private readonly int _receiveMaxQueueSize;
+        private readonly uint _transferDelay;
         private readonly List<ByteBuffer> _receiveList = new List<ByteBuffer>(100);
         private readonly byte[] _writeBuffer;
         private readonly ArrayCache<byte> _bufferCache = new ArrayCache<byte>(10, 100, 2);
@@ -32,7 +34,9 @@ namespace Zero.Game.Client
         private ConnectionState _state = ConnectionState.None;
         private bool _sendRequired;
         private ulong _lastReceivedBatchKey;
-        private long _eventTime;
+        private long _eventTime = 1;
+        private TransferMessage? _transfer;
+        private uint _transferTime;
 
         public ZeroClient(ClientPlugin plugin, ClientOptions options, IMessageHandler messageHandler)
         {
@@ -43,6 +47,7 @@ namespace Zero.Game.Client
             _writeBuffer = new byte[_sendBufferSize];
             _receiveBufferSize = options.NetworkingOptions.ServerBufferSize;
             _receiveMaxQueueSize = options.NetworkingOptions.MaxReceiveQueueSize;
+            _transferDelay = options.TransferDelayMs;
             _dataToSend = new EntityData(100, _bufferCache);
         }
 
@@ -96,21 +101,44 @@ namespace Zero.Game.Client
         public void Push<T>(T data) where T : unmanaged
         {
             ThrowHelper.ThrowIfDataNotDefined<T>();
-            _dataToSend.PushEvent(_eventTime, &data);
+            _dataToSend.PushEvent(_eventTime, ref data);
         }
 
         public void Update(uint time)
         {
             UpdateState();
-
-            if (_state == ConnectionState.Disconnected)
-            {
-                return;
-            }
+            if (_state == ConnectionState.Disconnected) return;
 
             ReceiveData(time);
+            ProcessTransfer(time);
             UpdatePlugin();
             SendData(time);
+        }
+
+        private void ProcessTransfer(uint time)
+        {
+            if (_transfer == null) return;
+            if (_socket != null)
+            {
+                _socket.Disconnect();
+                _socket = null;
+                _transferTime = time + _transferDelay;
+                return;
+            }
+            if (time < _transferTime) return;
+
+            var transferMessage = _transfer.Value;
+            _transfer = null;
+
+            var key = Encoding.ASCII.GetString(transferMessage.Key, TransferMessage.KeyLength);
+            var addressBytes = new byte[transferMessage.IpSize];
+            fixed (byte* addrPtr = addressBytes) 
+            {
+                Buffer.MemoryCopy(transferMessage.Ip, addrPtr, transferMessage.IpSize, transferMessage.IpSize);
+            }
+
+            var address = new IPAddress(addressBytes);
+            Start(address, transferMessage.Port, key);
         }
 
         private void UpdatePlugin()
@@ -138,10 +166,12 @@ namespace Zero.Game.Client
 
         private void ReceiveData(uint time)
         {
+            if (_socket == null || _state != ConnectionState.Connected) return;
             _socket.Receive(_receiveList);
             _sendRequired = _receiveList.Count != 0;
 
             var handler = _messageHandler;
+            MessageType messageType;
             ServerBatchMessage batchMessage = default;
             EntityMessage entityMessage = default;
             byte dataType = 0;
@@ -155,6 +185,24 @@ namespace Zero.Game.Client
                     fixed (byte* buffer = receiveBuffer.Data)
                     {
                         var reader = new BlitReader(buffer, receiveBuffer.Count);
+                        if (!reader.Read(&messageType))
+                        {
+                            ForciblyDisconnect("Received data faulted during read");
+                            return;
+                        }
+
+                        if (messageType == MessageType.Transfer)
+                        {
+                            TransferMessage transferMessage = default;
+                            if (!reader.Read(&transferMessage))
+                            {
+                                ForciblyDisconnect("Received data faulted during read");
+                                return;
+                            }
+
+                            _transfer = transferMessage;
+                            return;
+                        }
 
                         if (!reader.Read(&batchMessage))
                         {
@@ -245,6 +293,7 @@ namespace Zero.Game.Client
 
         private void SendData(uint time)
         {
+            if (_socket == null || _state != ConnectionState.Connected) return;
             try
             {
                 if ((!_sendRequired && !_dataToSend.HasOneOffData(_eventTime)) || 
@@ -331,6 +380,8 @@ namespace Zero.Game.Client
                 return;
             }
             _state = ConnectionState.Connected;
+            _dataToSend.Clear();
+            _eventTime = 1;
 
             try
             {
@@ -388,18 +439,9 @@ namespace Zero.Game.Client
 
         private void UpdateState()
         {
-            if (!_socket.Connecting && !_socket.Connected)
-            {
-                SetDisconnected();
-            }
-            else if (_socket.Connecting)
-            {
-                SetConnecting();
-            }
-            else if (_socket.Connected)
-            {
-                SetConnected();
-            }
+            if (_socket == null || _socket.Connecting) SetConnecting();
+            else if (_socket.Connected) SetConnected();
+            else SetDisconnected();
         }
     }
 }

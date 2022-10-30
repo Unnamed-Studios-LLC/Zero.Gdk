@@ -16,6 +16,7 @@ namespace Zero.Game.Shared
         public static LogLevel LogLevel { get; private set; }
         public static LogLevel InternalLogLevel { get; private set; }
         public static DataDefinition[] DataDefinitions { get; private set; }
+        public static long DataHash { get; private set; }
 
         internal static void InternalLog(LogLevel level, string message)
         {
@@ -57,6 +58,14 @@ namespace Zero.Game.Shared
         {
             InternalLogLevel = options.InternalLogLevel;
             DataDefinitions = dataDefinitions;
+            DataHash = GenerateDataHash(dataDefinitions);
+        }
+
+        private static long GenerateDataHash(DataDefinition[] dataDefinitions)
+        {
+            long hash = 1;
+            foreach (var dataDefinition in dataDefinitions) dataDefinition.ApplyHash(ref hash);
+            return hash;
         }
     }
 }

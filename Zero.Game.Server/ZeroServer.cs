@@ -4,10 +4,12 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Zero.Game.Model;
 using Zero.Game.Shared;
+using Zero.Game.Shared.Messaging;
 
 [assembly: InternalsVisibleTo("Zero.Game.Benchmark")]
 [assembly: InternalsVisibleTo("Zero.Game.Tests")]
@@ -149,6 +151,11 @@ namespace Zero.Game.Server
             {
                 return ConnectionFailReason.InvalidClientIpAddress;
             }
+            
+            if (ipAddress.IsIPv4MappedToIPv6)
+            {
+                ipAddress = ipAddress.MapToIPv4();
+            }
 
             if (_maxConnections >= 0 && _connections.Count >= _maxConnections)
             {
@@ -224,6 +231,7 @@ namespace Zero.Game.Server
         {
             RemoveConnections();
             ReceiveConnections();
+            TransferConnections();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -296,22 +304,17 @@ namespace Zero.Game.Server
                 success = false;
             }
 
-            if (!success)
+            if (!success ||
+                !_worlds.TryGet(worldId, out var world) ||
+                world.HasMaxConnections)
             {
                 connection.Disconnect();
-            }
-            else if (!_worlds.TryGet(worldId, out var world))
-            {
-                _unloadTasks.Add(UnloadConnectionAsync(connection));
-            }
-            else if (world.HasMaxConnections)
-            {
-                connection.Disconnect(); // TODO add a re-route plugin method
             }
             else
             {
                 connection.AddToWorld(_plugin, world);
             }
+            connection.LoadedSuccessfully = success;
             connection.Loaded = true;
         }
 
@@ -362,24 +365,20 @@ namespace Zero.Game.Server
 
         private void ReceiveData()
         {
-            Entities.AllowStructuralChange = false;
+            Entities.AllowStructuralChangeGlobal = false;
             try
             {
                 Parallel.ForEach(_connections, ReceiveData);
             }
             finally
             {
-                Entities.AllowStructuralChange = true;
+                Entities.AllowStructuralChangeGlobal = true;
             }
         }
 
         private unsafe void ReceiveData(Connection connection)
         {
-            if (!connection.Connected ||
-                !connection.Loaded)
-            {
-                return;
-            }
+            if (!connection.Loaded) return;
 
             using var scope = GameSynchronizationContext.CreateScope();
 
@@ -411,6 +410,8 @@ namespace Zero.Game.Server
                             connection.ForciblyRemove("Received invalid time from client");
                             return;
                         }
+
+                        connection.LastReceivedTime = batchMessage->Time;
 
                         if (!connection.HandleClientReceived(batchMessage)) // handle client received
                         {
@@ -479,6 +480,14 @@ namespace Zero.Game.Server
                     _receiveCache.Return(otherBuffer.Data);
                 }
                 connection.ReceiveList.Clear();
+
+                if (!connection.Connected && connection.KeepAlive)
+                {
+                    connection.ClientAcknowledging = false;
+                    handler.PreHandle(connection.LastReceivedTime);
+                    connection.FlushClientReceived();
+                    handler.PostHandle();
+                }
             }
         }
 
@@ -511,11 +520,7 @@ namespace Zero.Game.Server
                 var connection = _connections[i];
                 connection.UpdateTimeout(_clientTimeout);
 
-                if (!connection.Loaded ||
-                    connection.Connected)
-                {
-                    continue;
-                }
+                if (!connection.Loaded || connection.CanTransmit) continue;
 
                 _connections.PatchRemoveAt(i);
                 i--;
@@ -525,7 +530,11 @@ namespace Zero.Game.Server
                     connection.RemoveFromWorld(_plugin, true);
                 }
                 connection.Clear();
-                _unloadTasks.Add(UnloadConnectionAsync(connection));
+
+                if (connection.LoadedSuccessfully)
+                {
+                    _unloadTasks.Add(UnloadConnectionAsync(connection));
+                }
             }
         }
 
@@ -576,24 +585,29 @@ namespace Zero.Game.Server
 
         private void SendData()
         {
-            Entities.AllowStructuralChange = false;
+            Entities.AllowStructuralChangeGlobal = false;
             try
             {
                 Parallel.ForEach(_connections, SendData);
             }
             finally
             {
-                Entities.AllowStructuralChange = true;
+                Entities.AllowStructuralChangeGlobal = true;
             }
         }
 
         private unsafe void SendData(Connection connection)
         {
-            if (!connection.Connected ||
-                !connection.Loaded)
+            if (!connection.CanTransmit || !connection.Loaded) return;
+
+            if (connection.TransferRemoteResponse != null && !connection.TransferRemoteResponse.Started)
             {
-                return;
+                // remote transfer failed, init result and clear response
+                connection.TransferCompletion.TrySetResult(false);
+                connection.TransferRemoteResponse = null;
             }
+
+            if (connection.TransferRemoteResponse != null && connection.TransferSent) return; // already sent transfer
 
             using var scope = GameSynchronizationContext.CreateScope();
 
@@ -601,7 +615,7 @@ namespace Zero.Game.Server
             var world = connection.World;
             var view = connection.View;
             var writeBuffer = GetWriteBuffer();
-            ServerBatchMessage batchMessage;
+            ServerBatchMessage batchMessage = default;
             EntityMessage entityMessage;
             try
             {
@@ -614,86 +628,125 @@ namespace Zero.Game.Server
                         return;
                     }
 
-                    var removedCount = (ushort)view.RemovedEntities.Count;
-                    batchMessage = new ServerBatchMessage(connection.BatchId, world.Id, removedCount);
-                    if (!writer.Write(&batchMessage))
+                    var messageType = connection.TransferRemoteResponse != null ? MessageType.Transfer : MessageType.Batch;
+                    if (!writer.Write(&messageType))
                     {
                         connection.ForciblyRemove("Sent data exceeded the max send buffer");
                         return;
                     }
 
-                    if (removedCount != 0)
+                    if (connection.TransferRemoteResponse != null)
                     {
-                        var span = CollectionsMarshal.AsSpan(view.RemovedEntities);
-                        fixed (uint* removed = span)
+                        var response = connection.TransferRemoteResponse;
+                        var ipBytes = IPAddress.Parse(response.WorkerIp).GetAddressBytes();
+                        var transferMessage = new TransferMessage
                         {
-                            if (!writer.Write(removed, removedCount))
+                            Port = (ushort)response.Port,
+                            IpSize = (ushort)ipBytes.Length
+                        };
+
+                        fixed (byte* bytesPtr = ipBytes)
+                        {
+                            Buffer.MemoryCopy(bytesPtr, transferMessage.Ip, TransferMessage.IpLength, ipBytes.Length);
+                        }
+
+                        fixed (char* keyPtr = response.Key)
+                        {
+                            Encoding.ASCII.GetBytes(keyPtr, response.Key.Length, transferMessage.Key, TransferMessage.KeyLength);
+                        }
+
+                        if (!writer.Write(&transferMessage))
+                        {
+                            connection.ForciblyRemove("Sent data exceeded the max send buffer");
+                            return;
+                        }
+
+                        connection.TransferCompletion.TrySetResult(response.Started);
+                        connection.TransferSent = true;
+                    }
+                    else
+                    {
+                        var removedCount = (ushort)view.RemovedEntities.Count;
+                        batchMessage = new ServerBatchMessage(connection.BatchId, world.Id, removedCount);
+                        if (!writer.Write(&batchMessage))
+                        {
+                            connection.ForciblyRemove("Sent data exceeded the max send buffer");
+                            return;
+                        }
+
+                        if (removedCount != 0)
+                        {
+                            var span = CollectionsMarshal.AsSpan(view.RemovedEntities);
+                            fixed (uint* removed = span)
+                            {
+                                if (!writer.Write(removed, removedCount))
+                                {
+                                    connection.ForciblyRemove("Sent data exceeded the max send buffer");
+                                    return;
+                                }
+                            }
+                        }
+
+                        view.ProcessedEntities.Clear();
+                        var entityCount = 0;
+                        foreach (var entityId in view.QueryEntities)
+                        {
+                            if (!view.ProcessedEntities.Add(entityId))
+                            {
+                                continue; // entity already processed
+                            }
+
+                            var isNew = view.NewEntities.Contains(entityId);
+                            if (!world.Entities.TryGetEntityData(entityId, out var data))
+                            {
+                                continue;
+                            }
+
+                            if (!isNew && !data.HasOneOffData(time))
+                            {
+                                continue;
+                            }
+
+                            entityCount++;
+                            int dataCount = (isNew ? data.PersistentData.Count : data.PersistentUpdatedData.Count) + (data.HasEventData(time) ? data.EventData.Count : 0);
+
+                            if (dataCount > ushort.MaxValue)
+                            {
+                                connection.ForciblyRemove("Entity encountered with more than 65535 data values");
+                                return;
+                            }
+
+                            entityMessage = new EntityMessage(entityId, (ushort)dataCount);
+                            if (!writer.Write(&entityMessage))
+                            {
+                                connection.ForciblyRemove("Sent data exceeded the max send buffer");
+                                return;
+                            }
+
+                            if ((isNew && !data.PersistentData.Write(ref writer)) ||
+                                (!isNew && !data.PersistentUpdatedData.Write(ref writer)))
+                            {
+                                connection.ForciblyRemove("Sent data exceeded the max send buffer");
+                                return;
+                            }
+
+                            if (data.HasEventData(time) && !data.EventData.Write(ref writer))
                             {
                                 connection.ForciblyRemove("Sent data exceeded the max send buffer");
                                 return;
                             }
                         }
+
+                        connection.View.PostSend();
+
+                        if (entityCount == 0 &&
+                            removedCount == 0 &&
+                            (DateTime.UtcNow - connection.Socket.LastSendUtc).TotalMilliseconds < _clientTimeout.Milliseconds / 5) // send blank data every 1/5 of timeout to keep connection alive
+                        {
+                            return; // no data to send
+                        }
+                        connection.BatchId++; // increment batch
                     }
-
-                    view.ProcessedEntities.Clear();
-                    var entityCount = 0;
-                    foreach (var entityId in view.QueryEntities)
-                    {
-                        if (!view.ProcessedEntities.Add(entityId))
-                        {
-                            continue; // entity already processed
-                        }
-
-                        var isNew = view.NewEntities.Contains(entityId);
-                        if (!world.Entities.TryGetEntityData(entityId, out var data))
-                        {
-                            continue;
-                        }
-
-                        if (!isNew && !data.HasOneOffData(time))
-                        {
-                            continue;
-                        }
-
-                        entityCount++;
-                        int dataCount = (isNew ? data.PersistentData.Count : data.PersistentUpdatedData.Count) + (data.HasEventData(time) ? data.EventData.Count : 0);
-
-                        if (dataCount > ushort.MaxValue)
-                        {
-                            connection.ForciblyRemove("Entity encountered with more than 65535 data values");
-                            return;
-                        }
-
-                        entityMessage = new EntityMessage(entityId, (ushort)dataCount);
-                        if (!writer.Write(&entityMessage))
-                        {
-                            connection.ForciblyRemove("Sent data exceeded the max send buffer");
-                            return;
-                        }
-
-                        if ((isNew && !data.PersistentData.Write(ref writer)) ||
-                            (!isNew && !data.PersistentUpdatedData.Write(ref writer)))
-                        {
-                            connection.ForciblyRemove("Sent data exceeded the max send buffer");
-                            return;
-                        }
-
-                        if (data.HasEventData(time) && !data.EventData.Write(ref writer))
-                        {
-                            connection.ForciblyRemove("Sent data exceeded the max send buffer");
-                            return;
-                        }
-                    }
-
-                    connection.View.PostSend();
-
-                    if (entityCount == 0 &&
-                        removedCount == 0 &&
-                        (DateTime.UtcNow - connection.Socket.LastSendUtc).TotalMilliseconds < _clientTimeout.Milliseconds / 5) // send blank data every 1/5 of timeout to keep connection alive
-                    {
-                        return; // no data to send
-                    }
-                    connection.BatchId++; // increment batch
 
                     // send data
                     var dataLength = writer.BytesWritten;
@@ -709,7 +762,7 @@ namespace Zero.Game.Server
                     }
 
                     var byteBuffer = new ByteBuffer(sendBuffer, dataLength);
-                    connection.Send(ref batchMessage, ref byteBuffer);
+                    connection.Send(messageType == MessageType.Batch, ref batchMessage, ref byteBuffer);
                 }
             }
             finally
@@ -747,6 +800,50 @@ namespace Zero.Game.Server
             RemoveAllWorlds();
             WaitForTaskList(_unloadTasks, 4000, 100);
             GameSynchronizationContext.Close(_gracefulStopTimeoutMs);
+        }
+
+        private async Task TransferConnectionAsync(Connection connection, StartConnectionRequest request)
+        {
+            try
+            {
+                var response = await ServerDomain.DeploymentProvider.StartConnectionAsync(request).ConfigureAwait(false);
+                connection.TransferRemoteResponse = response;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e, "An error occurred while processing a remote transfer");
+                connection.TransferRemoteResponse = new StartConnectionResponse(ConnectionFailReason.InternalError);
+            }
+        }
+
+        private void TransferConnections()
+        {
+            for (int i = 0; i < _connections.Count; i++)
+            {
+                var connection = _connections[i];
+                if (connection.TransferWorldId == 0 || connection.TransferInitiated) continue;
+                connection.TransferInitiated = true;
+
+                if (_worlds.TryGet(connection.TransferWorldId, out var world))
+                {
+                    // do a local world transfer
+                    connection.RemoveFromWorld(_plugin, true);
+                    connection.View.Clear();
+                    connection.AddToWorld(_plugin, world);
+                    connection.TransferWorldId = 0;
+                    connection.TransferCompletion.TrySetResult(true);
+                    continue;
+                }
+
+                var address = connection.RemoteEndPoint.Address;
+                var request = new StartConnectionRequest
+                {
+                    WorldId = connection.TransferWorldId,
+                    Data = new Dictionary<string, string>(connection.Data),
+                    ClientIp = address.IsIPv4MappedToIPv6 ? address.MapToIPv4().ToString() : address.ToString(),
+                };
+                Task.Run(() => TransferConnectionAsync(connection, request));
+            }
         }
 
         private async Task UnloadConnectionAsync(Connection connection)
@@ -840,14 +937,14 @@ namespace Zero.Game.Server
                 connectionsToQuery++;
             }
 
-            Entities.AllowStructuralChange = false;
+            Entities.AllowStructuralChangeGlobal = false;
             try
             {
                 Parallel.For(0, (int)connectionsToQuery, UpdateView);
             }
             finally
             {
-                Entities.AllowStructuralChange = true;
+                Entities.AllowStructuralChangeGlobal = true;
                 _connectionViewOffset = (_connectionViewOffset + 1) % _connectionStepSize;
             }
         }

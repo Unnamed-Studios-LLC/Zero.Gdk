@@ -18,13 +18,13 @@ namespace Zero.Game.Server
             public int Count { get; set; }
         }
 
-        private const int KeyLength = 20;
-
         private readonly ConcurrentDictionary<IPAddress, Bucket> _rateBuckets = new();
+        private readonly ConcurrentDictionary<SocketAsyncEventArgs, Socket> _sockets = new();
         private readonly ConcurrentDictionary<string, TState> _keyMap = new();
         private readonly Stack<SocketAsyncEventArgs> _receiveArgs = new();
         private readonly Queue<(Socket, TState)> _validatedSockets = new();
-        private readonly Queue<(string, DateTime)> _expirationQueue = new();
+        private readonly Queue<(string, DateTime)> _keyExpirationQueue = new();
+        private readonly Queue<(SocketAsyncEventArgs, DateTime)> _socketExpirationQueue = new();
         private readonly TimeSpan _keyLifetime;
         private readonly int _requestsPerIpPerPeriod;
         private readonly TimeSpan _perIpPeriod = TimeSpan.FromSeconds(10);
@@ -49,9 +49,9 @@ namespace Zero.Game.Server
             }
 
             var now = DateTime.UtcNow;
-            lock (_expirationQueue)
+            lock (_keyExpirationQueue)
             {
-                while (_expirationQueue.TryPeek(out var pair))
+                while (_keyExpirationQueue.TryPeek(out var pair))
                 {
                     if (pair.Item2 > now)
                     {
@@ -59,7 +59,17 @@ namespace Zero.Game.Server
                     }
 
                     _keyMap.TryRemove(pair.Item1, out _);
-                    _expirationQueue.Dequeue();
+                    _keyExpirationQueue.Dequeue();
+                }
+            }
+
+            lock (_socketExpirationQueue)
+            {
+                while (_socketExpirationQueue.TryPeek(out var pair))
+                {
+                    if (pair.Item2 > now) break;
+                    _socketExpirationQueue.Dequeue();
+                    Remove(pair.Item1);
                 }
             }
         }
@@ -78,9 +88,9 @@ namespace Zero.Game.Server
             }
             while (!_keyMap.TryAdd(key, state));
             var expiration = (key, DateTime.UtcNow + _keyLifetime);
-            lock (_expirationQueue)
+            lock (_keyExpirationQueue)
             {
-                _expirationQueue.Enqueue(expiration);
+                _keyExpirationQueue.Enqueue(expiration);
             }
             return new StartConnectionResponse(string.Empty, 0, key);
         }
@@ -89,7 +99,13 @@ namespace Zero.Game.Server
         {
             var args = GetArgs();
             args.UserToken = socket;
-            args.SetBuffer(0, KeyLength);
+            args.SetBuffer(0, ConnectionSocket.KeyLength);
+            _sockets[args] = socket;
+
+            lock (_socketExpirationQueue)
+            {
+                _socketExpirationQueue.Enqueue((args, DateTime.UtcNow + _keyLifetime));
+            }
 
             try
             {
@@ -101,7 +117,7 @@ namespace Zero.Game.Server
             catch (Exception e)
             {
                 Debug.LogError(e, $"An error occurred during {nameof(StartValidation)}");
-                socket.Close();
+                Remove(args);
             }
         }
 
@@ -150,7 +166,7 @@ namespace Zero.Game.Server
 
         private static string GenerateKey()
         {
-            return Random.StringAlphaNumeric(KeyLength);
+            return Random.StringAlphaNumeric(ConnectionSocket.KeyLength);
         }
 
         private SocketAsyncEventArgs GetArgs()
@@ -160,14 +176,14 @@ namespace Zero.Game.Server
             {
                 if (_receiveArgs.TryPop(out args))
                 {
-                    args.SetBuffer(0, KeyLength);
+                    args.SetBuffer(0, ConnectionSocket.KeyLength);
                     return args;
                 }
             }
 
             args = new SocketAsyncEventArgs();
             args.Completed += ProcessReceived;
-            args.SetBuffer(new byte[KeyLength], 0, KeyLength);
+            args.SetBuffer(new byte[ConnectionSocket.KeyLength], 0, ConnectionSocket.KeyLength);
             return args;
         }
 
@@ -177,20 +193,25 @@ namespace Zero.Game.Server
             if (Stopped ||
                 args.SocketError != SocketError.Success)
             {
-                socket.Shutdown(SocketShutdown.Both);
-                socket.Close();
-                ReturnArgs(args);
+                Remove(args);
                 return;
             }
 
-            while (!Stopped && socket.Connected)
+            while (!Stopped && args.SocketError == SocketError.Success)
             {
+                if (args.BytesTransferred == 0)
+                {
+                    Remove(args);
+                    return;
+                }
+
                 var received = args.Offset + args.BytesTransferred;
-                var remaining = KeyLength - received;
+                var remaining = ConnectionSocket.KeyLength - received;
                 if (remaining == 0)
                 {
                     var key = Encoding.ASCII.GetString(args.Buffer.AsSpan());
-                    if (_keyMap.TryRemove(key, out var state))
+                    if (_sockets.TryRemove(args, out _) &&
+                        _keyMap.TryRemove(key, out var state))
                     {
                         // validated, queue request for connection creation
                         lock (_validatedSockets)
@@ -219,13 +240,25 @@ namespace Zero.Game.Server
                 catch (Exception e)
                 {
                     Debug.LogError(e, $"An error occurred during {nameof(ProcessReceived)}");
-                    // TODO disconnect
+                    Remove(args);
+                    return;
                 }
             }
+
+            Remove(args);
+        }
+
+        private void Remove(SocketAsyncEventArgs args)
+        {
+            if (!_sockets.TryRemove(args, out var socket)) return;
+            socket.Shutdown(SocketShutdown.Both);
+            socket.Close();
+            ReturnArgs(args);
         }
 
         private void ReturnArgs(SocketAsyncEventArgs args)
         {
+            args.UserToken = null;
             lock (_receiveArgs)
             {
                 _receiveArgs.Push(args);

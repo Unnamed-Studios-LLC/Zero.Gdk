@@ -1,48 +1,29 @@
 ﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Order;
 using BenchmarkDotNet.Running;
 using System;
-using Zero.Game.Server;
-using Zero.Game.Shared;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace Zero.Game.Benchmark
 {
+    [MemoryDiagnoser]
     public unsafe class Program
     {
-        private const int EntityCount = 1000;
-
-        private struct TestComponentA
-        {
-            public uint Value;
-        }
-
-        private struct TestComponentB
-        {
-            public fixed uint Values[200];
-        }
-
-        private struct TestComponentC
-        {
-            public fixed uint Values[3];
-        }
-
-        private struct TestComponentD
-        {
-            public uint Value;
-        }
-
-
         private const int _count = 100;
         private const int _funcCount = 10000;
 
-        private readonly byte[] _bytesA = new byte[_count];
-        private readonly byte[] _bytesB = new byte[_count];
-
-        private TestComponentB[] _data = new TestComponentB[_count];
+        private readonly Dictionary<long, int> _dict = new();
+        private readonly List<KeyValuePair<long, int>> _list = new();
 
         [GlobalSetup]
         public unsafe void Setup()
         {
-
+            for (int i = 0; i < _count; i++)
+            {
+                _dict[Random.Shared.Next()] = Random.Shared.Next();
+            }
         }
 
         [GlobalCleanup]
@@ -52,13 +33,30 @@ namespace Zero.Game.Benchmark
         }
 
         [Benchmark]
-        public void MemoryCopy()
+        public int OrderBy()
         {
-            fixed (byte* src = _bytesA)
-            fixed (byte* dst = _bytesB)
+            int c = 0;
+            var ordered = _dict.OrderBy(x => x.Value);
+            foreach (var entry in ordered)
             {
-                Buffer.MemoryCopy(src, dst, _count, _count);
+                c += entry.Value;
             }
+            return c;
+        }
+
+        [Benchmark]
+        public int Sort()
+        {
+            int c = 0;
+            _list.AddRange(_dict);
+            _list.Sort((a, b) => b.Value - a.Value);
+            var span = CollectionsMarshal.AsSpan(_list);
+            foreach (ref var entry in span)
+            {
+                c += entry.Value;
+            }
+            _list.Clear();
+            return c;
         }
 
         static void Main(string[] args)
@@ -66,7 +64,7 @@ namespace Zero.Game.Benchmark
 #if DEBUG
             var p = new Program();
             p.Setup();
-
+            p.Sort();
             p.Cleanup();
 #else
             var summary = BenchmarkRunner.Run(typeof(Program).Assembly);

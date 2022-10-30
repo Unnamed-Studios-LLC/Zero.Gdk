@@ -53,18 +53,18 @@ namespace Zero.Game.Tests
             defaultC.Values[2] = 3;
 
             _layoutA = new EntityLayout()
-                .Define(new TestComponentA { Value = 123 })
-                .Define(defaultC)
+                .DefineAdd(new TestComponentA { Value = 123 })
+                .DefineAdd(defaultC)
                 ;
 
             _layoutB = new EntityLayout()
-                .Define(new TestComponentB { Value1 = 111, Value2 = 222, Value3 = 333 })
-                .Define<TestComponentD>()
+                .DefineAdd(new TestComponentB { Value1 = 111, Value2 = 222, Value3 = 333 })
+                .DefineAdd<TestComponentD>()
                 ;
 
             _layoutC = new EntityLayout()
-                .Define<TestComponentA>()
-                .Define<TestComponentD>()
+                .DefineAdd<TestComponentA>()
+                .DefineAdd<TestComponentD>()
                 ;
 
             // pre warm the entity buffers

@@ -10,6 +10,7 @@ namespace Zero.Game.Shared
 {
     internal sealed unsafe class ConnectionSocket
     {
+        public const int KeyLength = 20;
         private const int SizeLength = 4;
 
         private readonly Socket _socket;
@@ -71,10 +72,7 @@ namespace Zero.Game.Shared
 
         public void Connect(IPAddress address, int port, string key)
         {
-            if (Connecting)
-            {
-                return;
-            }
+            if (Connecting) return;
 
             Connecting = true;
             _key = Encoding.ASCII.GetBytes(key);
@@ -156,10 +154,7 @@ namespace Zero.Game.Shared
             {
                 LastSendUtc = DateTime.UtcNow;
                 _sendQueue.Enqueue(buffer);
-                if (_sending)
-                {
-                    return;
-                }
+                if (_sending) return;
                 _sending = true;
             }
 
@@ -208,7 +203,7 @@ namespace Zero.Game.Shared
         {
             try
             {
-                while (Connected)
+                while (args.SocketError == SocketError.Success)
                 {
                     if (args.BytesTransferred == 0)
                     {
@@ -293,7 +288,7 @@ namespace Zero.Game.Shared
         {
             try
             {
-                while (Connected)
+                while (_sendArgs.SocketError == SocketError.Success)
                 {
                     ByteBuffer buffer;
                     lock (_sendLock)

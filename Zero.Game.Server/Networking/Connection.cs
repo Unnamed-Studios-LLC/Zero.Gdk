@@ -1,14 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading.Tasks;
+using Zero.Game.Model;
 using Zero.Game.Shared;
+using Zero.Game.Shared.Messaging;
 
 namespace Zero.Game.Server
 {
-    public class Connection
+    public sealed class Connection : IEntity
     {
         internal ushort BatchId;
         internal ulong LastReceivedKey;
+        internal ulong LastSentKey;
         internal uint LastReceivedTime;
 
         private readonly ArrayCache<byte> _sendCache;
@@ -21,6 +25,11 @@ namespace Zero.Game.Server
         }
 
         /// <summary>
+        /// If the ClientReceivedMessageHandler is being called by client acknowledged data
+        /// </summary>
+        public bool ClientAcknowledging { get; internal set; } = true;
+
+        /// <summary>
         /// Message handler that processes messages as if it was the remote client receiving them
         /// </summary>
         public IMessageHandler ClientReceivedMessageHandler
@@ -28,6 +37,11 @@ namespace Zero.Game.Server
             get => ClientReceivedMessageHandlerInternal.Implementation;
             set => ClientReceivedMessageHandlerInternal.SetImplementation(value);
         }
+
+        /// <summary>
+        /// If the connection is connected
+        /// </summary>
+        public bool Connected => Socket.Connected;
 
         /// <summary>
         /// Data set when the connection was created
@@ -40,9 +54,19 @@ namespace Zero.Game.Server
         public uint EntityId { get; internal set; }
 
         /// <summary>
+        /// The Entities of the current world
+        /// </summary>
+        public Entities Entities => World?.Entities;
+
+        /// <summary>
         /// If this connection is connected to a world
         /// </summary>
         public bool InWorld => World != null;
+
+        /// <summary>
+        /// If the connection should not unload, even if the connection has disconnected
+        /// </summary>
+        public bool KeepAlive { get; set; } = false;
 
         /// <summary>
         /// Message handler for messages sent by the remote client
@@ -69,27 +93,45 @@ namespace Zero.Game.Server
         public object State { get; set; }
 
         /// <summary>
+        /// If this connection is currently transferring
+        /// </summary>
+        public bool Transferring => TransferWorldId != 0;
+
+        /// <summary>
         /// The world that this connection belongs to
         /// </summary>
         public World World { get; internal set; }
 
+        internal bool CanTransmit => Connected || KeepAlive;
         internal MessageHandler ClientReceivedMessageHandlerInternal { get; set; } = new();
-        internal bool Connected => Socket.Connected;
         internal bool HasClientReceivedMessageHandler => ClientReceivedMessageHandlerInternal.Implementation != null;
         internal bool Loaded { get; set; }
+        internal bool LoadedSuccessfully { get; set; }
         internal MessageHandler MessageHandlerInternal { get; set; } = new();
         internal List<ByteBuffer> ReceiveList { get; } = new();
         internal ConnectionSocket Socket { get; }
         internal Queue<ByteBuffer> SentBuffers { get; } = new();
         internal HashSet<ulong> SentKeys { get; } = new();
+        internal bool TransferInitiated { get; set; }
+        internal uint TransferWorldId { get; set; }
+        internal TaskCompletionSource<bool> TransferCompletion { get; set; }
+        internal StartConnectionResponse TransferRemoteResponse { get; set; }
+        internal bool TransferSent { get; set; }
         internal View View { get; } = new();
 
         /// <summary>
         /// Disconnects the remote client
         /// </summary>
-        public void Disconnect()
+        public void Disconnect() => Socket.Disconnect();
+
+        public Task<bool> TransferToWorldAsync(uint worldId)
         {
-            Socket.Disconnect();
+            if (Transferring) throw new Exception("Connection is already in the process of transferring. Check 'Transferring' property for the current transfer");
+
+            TransferInitiated = false;
+            TransferCompletion = new TaskCompletionSource<bool>();
+            TransferWorldId = worldId;
+            return TransferCompletion.Task;
         }
 
         internal void AddToWorld(ServerPlugin plugin, World world)
@@ -118,6 +160,13 @@ namespace Zero.Game.Server
             SentKeys.Clear();
         }
 
+        internal unsafe bool FlushClientReceived()
+        {
+            if (SentBuffers.Count == 0 || !HasClientReceivedMessageHandler) return true;
+            var clientMessage = new ClientBatchMessage(LastSentKey, LastReceivedTime);
+            return HandleClientReceived(&clientMessage);
+        }
+
         internal void ForciblyRemove(string reason)
         {
             Debug.LogDebug("Connection {0} forcibly removed: {1}", RemoteEndPoint, reason);
@@ -144,22 +193,35 @@ namespace Zero.Game.Server
             }
 
             var handler = ClientReceivedMessageHandlerInternal;
-            while (Connected)
+            while (CanTransmit)
             {
                 var sentBuffer = SentBuffers.Dequeue();
+                MessageType* messageType = null;
                 ServerBatchMessage* batchMessage = null;
                 EntityMessage* entityMessage = null;
                 byte* dataType = default;
                 int* sizeRead = null;
+                ushort* scalarCount = null;
                 try
                 {
                     fixed (byte* data = sentBuffer.Data)
                     {
                         var reader = new RawBlitReader(data, sentBuffer.Count);
-                        reader.Read(&sizeRead);
+                        if (!reader.Read(&sizeRead))
+                        {
+                            ForciblyRemove("A fault occurred while reading client received data: size");
+                            return false;
+                        }
+
+                        if (!reader.Read(&messageType))
+                        {
+                            ForciblyRemove("A fault occurred while reading client received data: messageType");
+
+                            return false;
+                        }
                         if (!reader.Read(&batchMessage))
                         {
-                            ForciblyRemove("A fault occurred while reading client received data");
+                            ForciblyRemove("A fault occurred while reading client received data: batch");
                             return false;
                         }
 
@@ -171,7 +233,7 @@ namespace Zero.Game.Server
                         {
                             if (!reader.Read(&removedEntityId))
                             {
-                                ForciblyRemove("A fault occurred while reading client received data");
+                                ForciblyRemove("A fault occurred while reading client received data: removed");
                                 return false;
                             }
                             handler.HandleRemove(*removedEntityId);
@@ -181,7 +243,7 @@ namespace Zero.Game.Server
                         {
                             if (!reader.Read(&entityMessage))
                             {
-                                ForciblyRemove("A fault occurred while reading client received data");
+                                ForciblyRemove("A fault occurred while reading client received data: entity");
                                 return false;
                             }
 
@@ -189,10 +251,33 @@ namespace Zero.Game.Server
 
                             for (uint d = 0; d < entityMessage->DataCount; d++)
                             {
-                                if (!reader.Read(&dataType) ||
-                                    !handler.HandleRawData(*dataType, ref reader)) // handle data
+                                if (!reader.Read(&dataType)) // handle data
                                 {
-                                    ForciblyRemove("A fault occurred while reading client received data");
+                                    ForciblyRemove("A fault occurred while reading client received data: data");
+                                    return false;
+                                }
+
+                                if (*dataType == byte.MaxValue)
+                                {
+                                    if (!reader.Read(&scalarCount) ||
+                                        !reader.Read(&dataType))
+                                    {
+                                        ForciblyRemove("A fault occurred while reading client received data: data");
+                                        return false;
+                                    }
+
+                                    for (int j = 0; j < *scalarCount; j++) // read/handle scalar datas
+                                    {
+                                        if (!handler.HandleRawData(*dataType, ref reader))
+                                        {
+                                            ForciblyRemove("A fault occurred while reading client received data: data");
+                                            return false;
+                                        }
+                                    }
+                                }
+                                else if (!handler.HandleRawData(*dataType, ref reader)) // handle single data
+                                {
+                                    ForciblyRemove("A fault occurred while reading client received data: data");
                                     return false;
                                 }
                             }
@@ -238,9 +323,9 @@ namespace Zero.Game.Server
             World = null;
         }
 
-        internal unsafe void Send(ref ServerBatchMessage batchMessage, ref ByteBuffer buffer)
+        internal unsafe void Send(bool hasBatch, ref ServerBatchMessage batchMessage, ref ByteBuffer buffer)
         {
-            if (HasClientReceivedMessageHandler)
+            if (hasBatch && HasClientReceivedMessageHandler)
             {
                 var copyBuffer = _sendCache.Get(buffer.Count);
                 fixed (byte* src = buffer.Data)
@@ -249,6 +334,7 @@ namespace Zero.Game.Server
                     Buffer.MemoryCopy(src, dst, buffer.Count, buffer.Count);
                 }
 
+                LastSentKey = batchMessage.BatchKey;
                 SentKeys.Add(batchMessage.BatchKey);
                 SentBuffers.Enqueue(new ByteBuffer(copyBuffer, buffer.Count));
             }

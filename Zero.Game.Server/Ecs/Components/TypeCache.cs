@@ -48,6 +48,14 @@ namespace Zero.Game.Server
                     return _index.Value;
                 }
 
+                var type = typeof(T);
+                if (type.Equals(typeof(Disabled)))
+                {
+                    _index = TypeCache.DisabledType;
+                    ZeroSize = GenerateIsZeroSize(type);
+                    return _index.Value;
+                }
+
                 if (TypeCache.NextType == TypeCache.MaxComponentTypes)
                 {
                     throw new Exception("Maximum types reached");
@@ -58,20 +66,12 @@ namespace Zero.Game.Server
                     throw new Exception($"Component {typeof(T).FullName} exceeds the max component size of {ushort.MaxValue}");
                 }
 
-                var type = typeof(T);
-                if (type.Equals(typeof(Disabled)))
-                {
-                    _index = TypeCache.DisabledType;
-                }
-                else
-                {
-                    _index = TypeCache.NextType++;
-                }
-                ZeroSize = GenerateIsZeroSize(type);
+                _index = TypeCache.NextType++;
                 TypeCache.ZeroSize.Add(ZeroSize);
                 TypeCache.Types.Add(type, _index.Value);
                 TypeCache.Sizes.Add(sizeof(T));
                 TypeCache.RemoveEventPublishers.Add(EventRemove);
+                ZeroSize = GenerateIsZeroSize(type);
                 return _index.Value;
             }
         }
